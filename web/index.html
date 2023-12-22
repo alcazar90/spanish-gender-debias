@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Text Input to API</title>
+    <style>
+        #richText {
+            width: 500px;
+            height: 50px;
+            border: 1px solid #ccc;
+            padding: 5px;
+            overflow: auto;
+        }
+
+        .highlighted {
+            text-decoration: underline;
+            color: purple;
+        }
+    </style>
+</head>
+<body>
+    <div id="richText" contenteditable="true"></div>
+    <div id="customUIContainer"></div>
+
+    <script>
+        const apiUrl = 'http://127.0.0.1:8000/debias';
+        const textInput = document.getElementById('richText');
+        const customUIContainer = document.getElementById('customUIContainer');
+        let requesting = false;
+        let prevValue = textInput.textContent;
+
+        textInput.addEventListener('input', () => {
+            const inputValue = textInput.textContent;
+
+            // Split the input into words
+            const currentWords = inputValue.split(' ');
+            const prevWords = prevValue.split(' ');
+
+            // Check if a new word has been completed
+            if (currentWords.length > prevWords.length + 2) {
+                sendDataToAPI(inputValue);
+                // Update the previous value
+                prevValue = inputValue;
+            }
+        });
+
+        function addCustomUI(response) {
+            const text = textInput.textContent;
+            const currentWords = text.split(' ');
+
+            // Clear the custom UI container
+            customUIContainer.innerHTML = '';
+            for (let i = 0; i < response.diff.input_positions.length; i++) {
+                const inputPos = response.diff.input_positions[i]
+                const output = response.diff.substitutions[i];
+                const replaceButton = document.createElement('button');
+                replaceButton.textContent = typeof inputPos === 'number' ? currentWords[inputPos] : currentWords.slice(inputPos[0], inputPos[1]).join(' ');
+                replaceButton.classList.add('highlighted', 'replBtn');
+                replaceButton.title = `Reemplazar por ${output.replace('<<REMOVE>>', '(Eliminar este texto)')}`;
+
+                // Add a click event to the button for replacement
+                replaceButton.addEventListener('click', () => {
+                    const currentWords = textInput.textContent.split(' ')
+
+                    if (typeof inputPos === 'number') {
+                        currentWords[inputPos] = output
+                    } else {
+                        var outputArray = output.split(' ');
+                        var outCount = 0;
+
+                        for (var j = inputPos[0]; j < inputPos[1]; j++) {
+                            currentWords[j] = outputArray[outCount];
+                            outCount++;
+                        }
+                    }
+
+                    updatedText = currentWords.join(" ").replace(' <<REMOVE>>', '')
+                    updateTextContent(textInput.textContent.slice(-1) === " " ? updatedText + " " : updatedText);
+                    replaceButton.remove();
+                });
+
+                // Append the button to the custom UI container
+                customUIContainer.appendChild(replaceButton);
+            }
+        }
+
+        function updateTextContent(text) {
+            textInput.innerHTML = text;
+
+            // Mueve el cursor al final del contenido editable
+            const range = document.createRange();
+            range.selectNodeContents(textInput);
+            range.collapse(false); // Colapsa el rango al final
+            const sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(range);
+            textInput.focus();
+        }
+
+        function sendDataToAPI(inputText) {
+
+            if (!requesting) {
+                requesting = true;
+                // Make a POST request to the API with the input text
+                fetch(apiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ text: inputText }),
+                })
+                .then(response => response.json())
+                .then(data => {
+                    // Handle the API response here
+                    console.log('API Response:', data);
+                    requesting = false;
+                    addCustomUI(data);
+                })
+                .catch(error => {
+                    console.error('API Error:', error);
+                });
+            }
+        }
+
+    </script>
+</body>
+</html>

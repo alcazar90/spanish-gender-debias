@@ -1,0 +1,6 @@
+MODEL_ID=GianniCatBug/falcon-7b-4bit-005-gender-debias-spanish
+MODEL_TYPE=CAUSAL
+BIT=4bit
+HF_TOKEN=
+REVISION=87ae1730160cf7022b4a02584223fa82f3e6fe52
+MNT_FACTOR=1.2

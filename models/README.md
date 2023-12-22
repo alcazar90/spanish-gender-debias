@@ -1,0 +1,1 @@
+Folder where model checkpoints are stored when model is fine-tuned.
