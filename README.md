@@ -13,6 +13,9 @@ pip install -r requirements.txt
 pip install -e .
 ```
 
+Ensure you have set your API keys correctly in your `.env` file, you can find an exmaple env file in the repo: `.example-env`.
+
+
 # Web
 
 1. Go to folder
