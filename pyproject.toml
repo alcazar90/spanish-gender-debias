@@ -1,0 +1,33 @@
+# Ref: https://packaging.python.org/en/latest/tutorials/packaging-projects/#configuring-metadata
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "debiasing"
+version = "0.1.0"
+description = "Spanish gender debiasing in STEM education"
+readme = "README.md"
+requires-python = ">=3.11"
+
+[project.urls]
+"Homepage" = "https://github.com/GianniCatBug/spanish-gender-debias"
+
+[tool.hatch.version]
+path = "__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["debiasing"]
+
+[tool.ruff]
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "W", "F"]
+ignore = ["E501"]
+
+[tool.ruff.lint.isort]
+case-sensitive = true
+
+[tool.ruff.format]
+line-ending = "auto"
