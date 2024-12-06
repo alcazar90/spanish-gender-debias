@@ -1,20 +1,11 @@
 import json
 from abc import ABC, abstractmethod
-from enum import Enum
 
 import requests
 from pydantic import BaseModel
 
-from debiasing.configs import settings
-
-
-class LLMMessage(BaseModel):
-    class MessageRole(Enum):
-        USER = "user"
-        SYSTEM = "system"
-
-    role: MessageRole
-    content: str
+from debiasing.configs import logger, settings
+from debiasing.llm.utils import LLMMessage, LLMToolDefinition
 
 
 class ModelConfigs(BaseModel):
@@ -27,15 +18,18 @@ class LLMModel(ABC):
         self,
         configs: ModelConfigs | None = None,
         system: str | None = None,
+        tools: list[LLMToolDefinition] | None = None,
     ):
         self.configs = configs if configs is not None else ModelConfigs()
         self.system = system
+        self.tools = tools or []
 
     @abstractmethod
     def get_answer(
         self,
         messages: list[str],
         system: str | None = None,
+        force_tool: bool = False,
     ) -> tuple[str, dict]:
         raise NotImplementedError
 
@@ -46,16 +40,19 @@ class AntrophicCompletion(LLMModel):
         configs: ModelConfigs | None = None,
         system: str | None = None,
         model_id: str = settings.ANTROPHIC_COMPLETION_MODEL,
+        tools: list[LLMToolDefinition] | None = None,
     ):
         super().__init__(
             configs=configs,
             system=system,
+            tools=tools,
         )
         self.model_id = model_id
 
     def get_answer(
         self,
         messages: list[LLMMessage],
+        force_tool: bool = False,
     ) -> tuple[str, dict]:
         parsed_messages = [
             {"role": message.role.value, "content": message.content}
@@ -68,11 +65,24 @@ class AntrophicCompletion(LLMModel):
             "content-type": "application/json",
         }
 
+        tool_config = (
+            [tool.anthropic_dump() for tool in self.tools] if self.tools else None
+        )
+
+        # Ref: https://docs.anthropic.com/en/docs/build-with-claude/tool-use#forcing-tool-use
         body = {
             "model": self.model_id,
             "messages": parsed_messages,
             "max_tokens": self.configs.max_tokens,
             "temperature": self.configs.temperature,
+            **(
+                {
+                    "tools": tool_config,
+                    "tool_choice": {"type": "any" if force_tool else "auto"},
+                }
+                if tool_config
+                else {}
+            ),
         }
 
         try:
@@ -82,7 +92,9 @@ class AntrophicCompletion(LLMModel):
                 data=json.dumps(body),
                 timeout=settings.LLM_TIMEOUT,
             )
+            logger.info(f"LLM Anthropic response: {response.text}")
 
+            # TODO: determine if the LLM response called a tool
             response.raise_for_status()
             response = response.json()
             text = response["content"][0]["text"]
@@ -98,16 +110,19 @@ class OpenAICompletion(LLMModel):
         configs: ModelConfigs | None = None,
         system: str | None = None,
         model_id: str = settings.OPENAI_COMPLETION_MODEL,
+        tools: list[LLMToolDefinition] | None = None,
     ):
         super().__init__(
             configs=configs,
             system=system,
+            tools=tools,
         )
         self.model_id = model_id
 
     def get_answer(
         self,
         messages: list[LLMMessage],
+        force_tool: bool = False,
     ) -> tuple[str, dict]:
         parsed_messages = [
             {"role": message.role.value, "content": message.content}
@@ -119,11 +134,24 @@ class OpenAICompletion(LLMModel):
             "Authorization": f"Bearer {settings.OPENAI_API_KEY}",
         }
 
+        # Note: tool_choice is required if tools are provided
+        tool_config = (
+            [tool.openai_dump() for tool in self.tools] if self.tools else None
+        )
+
         body = {
             "model": self.model_id,
             "messages": parsed_messages,
             "max_tokens": self.configs.max_tokens,
             "temperature": self.configs.temperature,
+            **(
+                {
+                    "tools": tool_config,
+                    "tool_choice": "required" if force_tool else "auto",
+                }
+                if tool_config
+                else {}
+            ),
         }
 
         try:
@@ -134,6 +162,9 @@ class OpenAICompletion(LLMModel):
                 timeout=settings.LLM_TIMEOUT,
             )
 
+            logger.info(f"LLM OpenAI response: {response.text}")
+
+            # TODO: determine if the LLM response called a tool
             response.raise_for_status()
             response = response.json()
             text = response["choices"][0]["message"]["content"]
