@@ -1,3 +1,4 @@
+import logging
 from functools import lru_cache
 
 from pydantic import ConfigDict
@@ -11,10 +12,10 @@ OPENAI_COMPLETION_MODEL = "gpt-4o-mini"
 OPENAI_EMB_MODEL = "text-embedding-3-small"
 ANTROPHIC_COMPLETION_MODEL = "claude-3-5-sonnet-20241022"
 
+
 # Ref: https://fastapi.tiangolo.com/advanced/settings/#read-settings-from-env
 # Ref: https://docs.pydantic.dev/latest/concepts/pydantic_settings/
 class Settings(BaseSettings):
-
     # OpenAI configs
     OPENAI_CHAT_ENDPOINT: str = "https://localhost:3000"
     OPENAI_EMB_ENDPOINT: str = "https://localhost:3000"
@@ -47,3 +48,13 @@ def get_settings() -> Settings:
 
 
 settings = get_settings()
+
+# Configure the logger
+logging.basicConfig(
+    level=logging.WARNING,  # Set the logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",  # Set the format for log messages
+    datefmt="%Y-%m-%d %H:%M:%S",  # Set the format for the date
+)
+
+# Create a logger
+logger = logging.getLogger(__name__)
