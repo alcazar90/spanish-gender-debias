@@ -77,6 +77,13 @@ class AntrophicCompletion(LLMModel):
             "temperature": self.configs.temperature,
             **(
                 {
+                    "system": self.system,
+                }
+                if self.system
+                else {}
+            ),
+            **(
+                {
                     "tools": tool_config,
                     "tool_choice": {"type": "any" if force_tool else "auto"},
                 }
@@ -128,6 +135,8 @@ class OpenAICompletion(LLMModel):
             {"role": message.role.value, "content": message.content}
             for message in messages
         ]
+        if self.system:
+            parsed_messages.insert(0, {"role": "system", "content": self.system})
 
         headers = {
             "Content-Type": "application/json",
@@ -142,7 +151,7 @@ class OpenAICompletion(LLMModel):
         body = {
             "model": self.model_id,
             "messages": parsed_messages,
-            "max_tokens": self.configs.max_tokens,
+            "max_completion_tokens": self.configs.max_tokens,
             "temperature": self.configs.temperature,
             **(
                 {
