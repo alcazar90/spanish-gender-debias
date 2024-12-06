@@ -1,11 +1,12 @@
+import json
 from abc import ABC, abstractmethod
 from enum import Enum
 
-import json
 import requests
 from pydantic import BaseModel
 
 from debiasing.configs import settings
+
 
 class LLMMessage(BaseModel):
     class MessageRole(Enum):
@@ -16,20 +17,41 @@ class LLMMessage(BaseModel):
     content: str
 
 
+class ModelConfigs(BaseModel):
+    max_tokens: int = settings.MAX_TOKENS
+    temperature: float = settings.TEMPERATURE
+
+
 class LLMModel(ABC):
-    def __init__(self):
-        self.settings = settings
+    def __init__(
+        self,
+        configs: ModelConfigs | None = None,
+        system: str | None = None,
+    ):
+        self.configs = configs if configs is not None else ModelConfigs()
+        self.system = system
 
     @abstractmethod
     def get_answer(
         self,
         messages: list[str],
+        system: str | None = None,
     ) -> tuple[str, dict]:
-        pass
+        raise NotImplementedError
 
-class Antrophic(LLMModel):
-    def __init__(self):
-        super().__init__()
+
+class AntrophicCompletion(LLMModel):
+    def __init__(
+        self,
+        configs: ModelConfigs | None = None,
+        system: str | None = None,
+        model_id: str = settings.ANTROPHIC_COMPLETION_MODEL,
+    ):
+        super().__init__(
+            configs=configs,
+            system=system,
+        )
+        self.model_id = model_id
 
     def get_answer(
         self,
@@ -43,14 +65,14 @@ class Antrophic(LLMModel):
         headers = {
             "x-api-key": settings.ANTROPHIC_API_KEY,
             "anthropic-version": "2023-06-01",
-            "content-type": "application/json"
+            "content-type": "application/json",
         }
 
         body = {
-            "model": settings.ANTROPHIC_COMPLETION_MODEL,
+            "model": self.model_id,
             "messages": parsed_messages,
-            "max_tokens": settings.MAX_TOKENS,
-            "temperature": settings.TEMPERATURE,
+            "max_tokens": self.configs.max_tokens,
+            "temperature": self.configs.temperature,
         }
 
         try:
@@ -71,8 +93,17 @@ class Antrophic(LLMModel):
 
 
 class OpenAICompletion(LLMModel):
-    def __init__(self):
-        super().__init__()
+    def __init__(
+        self,
+        configs: ModelConfigs | None = None,
+        system: str | None = None,
+        model_id: str = settings.OPENAI_COMPLETION_MODEL,
+    ):
+        super().__init__(
+            configs=configs,
+            system=system,
+        )
+        self.model_id = model_id
 
     def get_answer(
         self,
@@ -85,14 +116,14 @@ class OpenAICompletion(LLMModel):
 
         headers = {
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.settings.OPENAI_API_KEY}",
+            "Authorization": f"Bearer {settings.OPENAI_API_KEY}",
         }
 
         body = {
-            "model": self.settings.OPENAI_COMPLETION_MODEL,
+            "model": self.model_id,
             "messages": parsed_messages,
-            "max_tokens": self.settings.MAX_TOKENS,
-            "temperature": self.settings.TEMPERATURE,
+            "max_tokens": self.configs.max_tokens,
+            "temperature": self.configs.temperature,
         }
 
         try:
@@ -100,7 +131,7 @@ class OpenAICompletion(LLMModel):
                 settings.OPENAI_CHAT_ENDPOINT,
                 headers=headers,
                 json=body,
-                timeout=self.settings.LLM_TIMEOUT,
+                timeout=settings.LLM_TIMEOUT,
             )
 
             response.raise_for_status()
