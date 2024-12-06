@@ -63,9 +63,8 @@ class Antrophic(LLMModel):
 
             response.raise_for_status()
             response = response.json()
-            return response
-            # text = response["choices"][0]["message"]["content"]
-            # return text, response
+            text = response["content"][0]["text"]
+            return text, response
         except requests.exceptions.RequestException as err:
             print(f"Request failed: {err}")
             return str(err), {}
