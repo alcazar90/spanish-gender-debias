@@ -8,6 +8,7 @@ from debiasing.configs import logger, settings
 from debiasing.llm.utils import LLMMessage, LLMToolDefinition
 
 
+# TODO: Create a decorator for LLMModel.get_answer to modify the behavior and implement ReACT...
 class ModelConfigs(BaseModel):
     max_tokens: int = settings.MAX_TOKENS
     temperature: float = settings.TEMPERATURE
@@ -102,6 +103,7 @@ class AntrophicCompletion(LLMModel):
             logger.info(f"LLM Anthropic response: {response.text}")
 
             # TODO: determine if the LLM response called a tool
+            # In Anthropic, 'stop_reason' == 'tool_use'if a tool was used
             response.raise_for_status()
             response = response.json()
             text = response["content"][0]["text"]
@@ -174,10 +176,12 @@ class OpenAICompletion(LLMModel):
             logger.info(f"LLM OpenAI response: {response.text}")
 
             # TODO: determine if the LLM response called a tool
+            # In OpenAI, in response['choices'] if a response_part['finish_reason'] == 'tool_calls' then a tool was used
             response.raise_for_status()
             response = response.json()
             text = response["choices"][0]["message"]["content"]
             return text, response
         except requests.exceptions.RequestException as err:
             print(f"Request failed: {err}")
+            print(f"response content: {response.content}")
             return str(err), {}

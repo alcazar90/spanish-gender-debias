@@ -21,15 +21,18 @@ class LLMToolDefinition(BaseModel):
         None,
         alias="inputSchema",
     )
+    structured_output: bool = False
 
     def openai_dump(self):
         """See OpenAI API reference chat completion for function calling: https://platform.openai.com/docs/api-reference/chat/create"""
+        # Ref: https://github.com/openai/openai-python/blob/19ecaafeda91480d0dfd7ce44e7317220b9d48b6/src/openai/types/shared/response_format_json_schema.py#L13
+        # Ref: https://openai.com/index/introducing-structured-outputs-in-the-api/
         return {
             "type": "function",
             "function": {
                 "name": self.name,
                 "description": self.description,
-                "strict": True,
+                "strict": self.structured_output,
                 "parameters": self.input_schema,
             },
         }
@@ -39,7 +42,5 @@ class LLMToolDefinition(BaseModel):
         return {
             "name": self.name,
             "description": self.description,
-            "inputSchema": {
-                "json": self.input_schema,
-            },
+            "input_schema": self.input_schema,
         }
