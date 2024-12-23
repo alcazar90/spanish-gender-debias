@@ -46,6 +46,7 @@ class GenderBiasesEnum(StrEnum):
     SEXISM = "SEXISM"
     EXCLUSIONARY_TERMS = "EXCLUSIONARY_TERMS"
     SEMANTIC_BIAS = "SEMANTIC_BIAS"
+    UNBIASED = "UNBIASED"
 
     @property
     def description(self) -> str:
@@ -58,6 +59,7 @@ class GenderBiasesEnum(StrEnum):
             GenderBiasesEnum.SEXISM: "Sexism can be defined as discrimination, stereotyping, or prejudice based on one's sex.",
             GenderBiasesEnum.EXCLUSIONARY_TERMS: "Exclusionary terms bias is the use of terms that exclude or marginalize a particular gender, often by using male-oriented terms as the default.",
             GenderBiasesEnum.SEMANTIC_BIAS: "Semantic bias is the use of words or phrases that have a gendered connotation, which can reinforce stereotypes or biases.",
+            GenderBiasesEnum.UNBIASED: "No gender bias detected",
         }
         return descriptions[self]
 
@@ -90,6 +92,7 @@ class GenderBiasesEnum(StrEnum):
                 "'Cookie': lovely woman.",
                 "A woman's tongue three inches long can kill a man six feet high.",
             ],
+            GenderBiasesEnum.UNBIASED: ["The programmer must carry the laptop to work."],
         }
         return examples[self]
 
@@ -127,7 +130,7 @@ class MultiLabelGenderBiasClassifier(
     )
 
     bias_text: list[str] = Field(
-        description="A list with the specific parts of the text that trigger a gender bias detection specified in bias_label.",
+        description="A list with the specific parts of the text that trigger a gender bias detection specified in bias_label. If no bias is detected, the text is considered unbiased an use None.",
         title="bias_text",
     )
 

@@ -1,6 +1,18 @@
 from enum import Enum
+from typing import Any
 
 from pydantic import BaseModel, Field
+
+
+class TextPart(BaseModel):
+    type: str = "text"
+    text: str
+
+
+class ToolPart(BaseModel):
+    type: str = "tool"
+    name: str
+    arguments: dict[str, Any]
 
 
 class LLMMessage(BaseModel):
