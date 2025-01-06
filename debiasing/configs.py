@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str | None = None
     OPENAI_COMPLETION_MODEL: str = OPENAI_COMPLETION_MODEL
     OPENAI_EMB_MODEL: str = OPENAI_EMB_MODEL
+    OPENAI_TOOL_DESCRIPTION_LENGTH: int = 1024
 
     # Antrophic configs
     ANTROPHIC_CHAT_ENDPOINT: str = "https://localhost:3000"
