@@ -56,7 +56,12 @@ class AntrophicCompletion(LLMModel):
         force_tool: bool = False,
     ) -> tuple[TextPart | None, ToolPart | None, dict]:
         parsed_messages = [
-            {"role": message.role.value, "content": message.content}
+            {
+                "role": "assistant"
+                if message.role.value == LLMMessage.MessageRole.SYSTEM.value
+                else message.role.value,
+                "content": message.content,
+            }
             for message in messages
         ]
 
