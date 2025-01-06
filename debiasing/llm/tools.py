@@ -35,6 +35,7 @@ CALCULATOR = LLMToolDefinition(
 
 # Define a GenderBiasesEnum class with the different kind of biases to detect in the text, providing
 # a description and examples for each one...
+# Best tool practices: https://docs.anthropic.com/en/docs/build-with-claude/tool-use#best-practices-for-tool-definitions
 # TODO: Improve gender descriptions and examples provides (in spanish (?)) ask for support to Darinka
 class GenderBiasesEnum(StrEnum):
     """Kind of gender biases to detect in the text
@@ -109,6 +110,49 @@ GENDER_BIAS_CLASSIFIER_DESCRIPTION += "\n\n".join(
 )
 
 
+GENDER_BIAS_CLASSIFIER_DESCRIPTION = """
+This tool identifies one or more gender biases in a given text. The tool performs a multi-label classification to detect specific gender biases and specifies the parts of the text that contain these biases. The following gender biases are detected:
+
+1. GENERIC_PRONOUNS:
+   - Description: Generic pronouns bias is the use of gender-specific pronouns when a gender-neutral pronoun would be more appropriate.
+   - When to use: Use this bias when the text uses gender-specific pronouns instead of gender-neutral pronouns.
+   - Caveats: Ensure that the context of the pronoun usage is considered to avoid false positives.
+   - Limitations: May not detect biases in languages with less clear gender-neutral pronouns.
+
+2. STEREOTYPING_BIAS:
+   - Description: Stereotyping bias is the use of stereotypes to make assumptions about a person's abilities, interests, or characteristics.
+   - When to use: Use this bias when the text makes stereotypical assumptions about individuals based on their gender.
+   - Caveats: Be cautious of cultural differences in stereotypes.
+   - Limitations: May not detect subtle or implicit stereotypes.
+
+3. SEXISM:
+   - Description: Sexism can be defined as discrimination, stereotyping, or prejudice based on one's sex.
+   - When to use: Use this bias when the text contains discriminatory or prejudiced statements based on gender.
+   - Caveats: Context is crucial to accurately identify sexism.
+   - Limitations: May not detect indirect or nuanced sexism.
+
+4. EXCLUSIONARY_TERMS:
+   - Description: Exclusionary terms bias is the use of terms that exclude or marginalize a particular gender, often by using male-oriented terms as the default.
+   - When to use: Use this bias when the text uses terms that exclude or marginalize a gender.
+   - Caveats: Consider the historical and cultural context of the terms.
+   - Limitations: May not detect biases in languages with gender-neutral terms.
+
+5. SEMANTIC_BIAS:
+   - Description: Semantic bias is the use of words or phrases that have a gendered connotation, which can reinforce stereotypes or biases.
+   - When to use: Use this bias when the text uses gendered words or phrases that reinforce stereotypes.
+   - Caveats: Be aware of the context in which the words or phrases are used.
+   - Limitations: May not detect subtle or context-dependent semantic biases.
+
+6. UNBIASED:
+   - Description: No gender bias detected.
+   - When to use: Use this label when the text does not contain any detectable gender biases.
+   - Caveats: Ensure thorough analysis to confirm the absence of bias.
+   - Limitations: May not account for all possible biases.
+
+This tool should not be used for texts where gender biases are not relevant or where the context requires gender-specific language. The tool's output includes a list of detected biases, the specific parts of the text that trigger these biases, and a confidence score for each bias detected.
+"""
+
+
 # This kind of tool is a structured output, i.e. complete a json schema for the output, in this case, the output is the bias_label and the bias_text
 # Therefore, our multi label classification is to detect specific labels (define in GenderBiasesEnum) in the text and specify the specific part of the text that contains
 # Ref: Using structured outputs with function calling, see the following references:
@@ -125,7 +169,7 @@ class MultiLabelGenderBiasClassifier(
     """
 
     bias_label: list[GenderBiasesEnum] = Field(
-        description="List of biases labels detected in the text (e.g. GENERIC_PRONOUNS, SEXISM, STEREOTYPING_BIAS).",
+        description="List of biases labels detected within the text.",
         title="bias_label",
     )
 
@@ -164,14 +208,50 @@ class MultiLabelGenderBiasClassifier(
 # Now we will define Multi-label gender bias classifier tool using LLMToolDefinition
 # TODO: Improve the description of the tool and use GENDER_BIAS_CLASSIFIER_DESCRIPTION, currently
 # the description is passing as a system prompt to the model (see debiasing-doc.ipynb). See the documentation
-# and best practices in OpenAI and Anthropic for defining the description of the tool, as well as the number of 
+# and best practices in OpenAI and Anthropic for defining the description of the tool, as well as the number of
 # characters allowed for the description.
 GENDER_BIAS_MULTI_LABEL_CLASSIFIER = LLMToolDefinition(
     name="gender_bias_classifier",
-    description="Identify gender biases in a given text (if any) and for each bias specify in which specific part of the text is located. Therefore, there is a correspondence between the bias_label and the bias_text.",
+    description=GENDER_BIAS_CLASSIFIER_DESCRIPTION,
+    # description="Identify gender biases in a given text (if any) and for each bias specify in which specific part of the text is located. Therefore, there is a correspondence between the bias_label and the bias_text.",
     inputSchema=MultiLabelGenderBiasClassifier.model_json_schema(),
     structured_output=True,
 )
 
 
-# TODO: Define a tool for transfer style or debiasing a given text
+# Define a tool for a kind of sequence-to-sequence transfer style for biased-to-debiased gender text...
+class DebiasingText(BaseModel,
+                    extra="forbid",):
+    """A tool for debiasing a given text"""
+
+    debiasing_text: str = Field(
+        description="The debiased text version from the gender biased version.",
+        title="debiasing_text",
+    )
+    reasoning: list[str] = Field(
+        description="The reasoning steps behind the debiasing process.",
+        title="reasoning",
+    )
+
+    model_config = {
+        "json_schema_extra": {
+            "required": [
+                "debiasing_text",
+                "reasoning",
+            ],
+            "additionalProperties": False,
+        }
+    }
+
+
+DEBIASING_TEXT_DESCRIPTION = """
+Debiasing a text that contain gender biases. The fragment of the text will be given with the specific gender bias detected, your work is neutralize the gender and present a debiased text.
+"""
+
+DEBIASER = LLMToolDefinition(
+    name="debiaser",
+    description=DEBIASING_TEXT_DESCRIPTION,
+    inputSchema=DebiasingText.model_json_schema(),
+    structured_output=True,
+)
+
