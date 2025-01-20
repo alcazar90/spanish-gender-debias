@@ -13,6 +13,7 @@ OPENAI_COMPLETION_MODEL = "gpt-4o"
 # Ref: https://platform.openai.com/docs/guides/embeddings
 OPENAI_EMB_MODEL = "text-embedding-3-small"
 ANTROPHIC_COMPLETION_MODEL = "claude-3-5-sonnet-20241022"
+# ANTROPHIC_COMPLETION_MODEL = "claude-3-5-haiku-20241022"
 
 
 # Ref: https://fastapi.tiangolo.com/advanced/settings/#read-settings-from-env
