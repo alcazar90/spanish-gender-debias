@@ -30,6 +30,15 @@ class AgentResponse(BaseModel):
     )
 
 
+class AgentPrediction(BaseModel):
+    """Prediction of the agent given an input message or a list of messages. This is the dataclass for the output of the Debiaser.prediction method"""
+    input: str
+    biases: str | None = None
+    scores: str | None = None
+    debias_reasoning: str | None = None
+    output: str | None = None
+
+
 class AgentError(Exception):
     def __init__(self, message: str, agent_response: AgentResponse):
         super().__init__(message)
@@ -177,42 +186,41 @@ class Debiaser(Agent):
     def prediction(
         self,
         input: str | LLMMessage | list[LLMMessage],
-    ) -> dict[str, Any]:
+    ) -> AgentPrediction:
         """
         Predict the output of the agent given an input message or a list of messages
         """
-        output = {
-            "input": input,
-            "biases": None,
-            "scores": None,
-            "debias_reasoning": None,
-            "output": self._UNBIASED_OUTPUT,
-        }
-
         # Capture the input
         if isinstance(input, str):
-            output["input"] = input
+            input_str = input
             input = [LLMMessage(role=LLMMessage.MessageRole.USER, content=input)]
         elif isinstance(input, LLMMessage):
-            output["input"] = input.content
+            input_str = input.content
             input = [input]
         elif isinstance(input, list) and all(
             isinstance(msg, LLMMessage) for msg in input
         ):
-            output["input"] = input[0].content
+            input_str = input[0].content
         else:
             raise ValueError("Invalid input type")
 
         debiaser_response = self.execute_task(input)
 
+        # Create an AgentPrediction object
+        prediction = AgentPrediction(input=input_str, output=self._UNBIASED_OUTPUT)
+
         # Parse the debiaser response into the output dictionary
         for tool in debiaser_response.tool_activations:
             if tool.tool_name == GENDER_BIAS_MULTI_LABEL_CLASSIFIER.name:
-                output["biases"] = ", ".join(tool.tool_results.get("bias_labels", [""]))
-                output["scores"] = tool.tool_results.get("scores", None)
+                prediction.biases = ", ".join(
+                    tool.tool_results.get("bias_labels", [""])
+                )
+                prediction.scores = ", ".join(
+                    [str(score) for score in tool.tool_results.get("scores", [""])]
+                )
             elif tool.tool_name == DEBIASER.name:
-                output["debias_reasoning"] = ", ".join(
+                prediction.debias_reasoning = ", ".join(
                     tool.tool_results.get("reasoning", [""])
                 )
-                output["output"] = tool.tool_results.get("debiasing_text", None)
-        return output
+                prediction.output = tool.tool_results.get("debiasing_text", None)
+        return prediction
