@@ -225,7 +225,7 @@ class DebiasingText(BaseModel,
     """A tool for debiasing a given text"""
 
     debiasing_text: str = Field(
-        description="The neutralized version of the text with gender biases removed while maintaining original context and meaning.",
+                description="The neutralized version of the text with gender biases removed while maintaining original context and meaning.",
         title="debiasing_text",
     )
     reasoning: list[str] = Field(
@@ -244,7 +244,6 @@ class DebiasingText(BaseModel,
     }
 
 
-# TODO: Agregar que se modifique el texto para que sea neutral en cuanto a género con el mínimo de cambios posibles realizados
 DEBIASING_TEXT_DESCRIPTION = """
 A text analysis and modification tool desgiend for debiasing a text that contain gender biases. The fragment of the text will be given with the specific gender bias detected, your work is neutralize the biases applying minimal modifications and present a debiased text version while preserving the original meaning and context.
 """
@@ -255,4 +254,3 @@ DEBIASER = LLMToolDefinition(
     inputSchema=DebiasingText.model_json_schema(),
     structured_output=True,
 )
-
