@@ -45,6 +45,7 @@ class AgentError(Exception):
         self.agent_response = agent_response
 
 
+# TODO: Allow to instantiate LLM providers with a system prompt... 
 class Agent(ABC):
     def __init__(
         self,
@@ -129,6 +130,8 @@ class Debiaser(Agent):
                 return agent_response
 
             # Otherwise, proceed with the debiasing process preparing the messages given the bias detected, i.e. format the prompt
+            # TODO: Important to capture this prompt in a separate function and with proper variable to track as a configuration
+            # i.e., there is a lever to change or try different version in order to check the agent performance...
             tool_result_into_text = "Analyzing the previous text I have the following information about gender biases:\n"
             for text, label, score in zip(
                 bias_text_detected, bias_label_detected, score_levels
@@ -144,6 +147,7 @@ class Debiaser(Agent):
                     role=LLMMessage.MessageRole.SYSTEM,
                     content=tool_result_into_text,
                 ),
+                # TODO: Here there is another user instruction or prompt
                 LLMMessage(
                     role=LLMMessage.MessageRole.USER,
                     content="Now you will debias the text",
