@@ -32,10 +32,13 @@ class Settings(BaseSettings):
     ANTROPHIC_API_KEY: str | None = None
     ANTROPHIC_COMPLETION_MODEL: str = ANTROPHIC_COMPLETION_MODEL
 
+    # Logging in W&B
+    WANDB_PROJECT: str = "debiasing-gender-biases"
+
     # General LLM configs
     LLM_TIMEOUT: int = 15
     TEMPERATURE: float = 0.0
-    MAX_TOKENS: int = 400
+    MAX_TOKENS: int = 600
 
     model_config: ConfigDict = SettingsConfigDict(
         # env files are overwritten in reverse order of preference.

@@ -4,3 +4,4 @@ pydantic-settings==2.1.0
 requests
 pandas
 openpyxl
+weave

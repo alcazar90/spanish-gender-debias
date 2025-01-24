@@ -1,10 +1,60 @@
+import weave
 from abc import ABC, abstractmethod
+from datetime import datetime
 from debiasing.llm.models import AntrophicCompletion, ModelConfigs, OpenAICompletion
 from debiasing.llm.tools import DEBIASER, GENDER_BIAS_MULTI_LABEL_CLASSIFIER
 from debiasing.configs import logger
 from debiasing.llm.utils import LLMMessage
 from typing import Any
 from pydantic import BaseModel, Field
+from debiasing.configs import settings
+
+client = weave.init(settings.WANDB_PROJECT)
+
+
+# System prompt to instantiate the LLM used by the Debiaser agent
+DEBIASER_SYSTEM_PROMPT = weave.StringPrompt("""You are a linguistic expert in gender bias analysis specialized in Spanish language communication. 
+
+Tools at your disposal:
+- gender_bias_classifier: Identifies specific types of gender biases in text
+- debiaser: Neutralizes identified gender biases while preserving semantic meaning
+
+Core principles:
+- Minimal linguistic intervention
+- Maintain original text's communicative intent
+- Prioritize cultural sensitivity and linguistic precision
+""")
+
+
+# Prompt for system message with the GENDER_BIAS_MULTI_LABEL_CLASSIFIER tool result
+# and user message to ask the LLM to debias the text, both prompt correspond to the
+# second step of the agent execution
+DEBIASER_SYSTEM_MSG = weave.StringPrompt("""Gender bias analysis detected in the text:
+{bias_details}
+""")
+
+
+DEBIASER_USER_MSG = weave.StringPrompt("""Proceed to neutralize the original text from the gender biases detected using the debiaser tool.
+Keep in mind the following debiasing instructions:
+- Neutralize while keeping the text edition as minimal as possible
+- Use Spanish-specific inclusive language strategies
+- Avoid complex or verbose reformulations
+- Ensure natural, fluid language
+""")
+
+
+# Log the prompts in the Weave system
+weave.publish(DEBIASER_SYSTEM_PROMPT, name="DEBIASER_SYSTEM_PROMPT")
+weave.publish(DEBIASER_SYSTEM_MSG, name="DEBIASER_SYSTEM_MSG")
+weave.publish(DEBIASER_USER_MSG, name="DEBIASER_USER_MSG")
+
+
+# Output message when the text is considered unbiased
+UNBIASED_OUTPUT = "UNBIASED"
+
+
+# Output message when the debiasing process fails
+DEBIASING_FAILURE_MSG = "Debiasing tool not activated"
 
 
 class ToolActivation(BaseModel):
@@ -32,6 +82,7 @@ class AgentResponse(BaseModel):
 
 class AgentPrediction(BaseModel):
     """Prediction of the agent given an input message or a list of messages. This is the dataclass for the output of the Debiaser.prediction method"""
+
     input: str
     biases: str | None = None
     scores: str | None = None
@@ -45,23 +96,25 @@ class AgentError(Exception):
         self.agent_response = agent_response
 
 
-# TODO: Allow to instantiate LLM providers with a system prompt... 
 class Agent(ABC):
     def __init__(
         self,
         provider="anthropic",
         tools=None,
+        system=None,
         model_config=ModelConfigs(max_tokens=400, temperature=0.8),
     ):
         if provider == "anthropic":
             self.llm = AntrophicCompletion(
                 configs=model_config,
                 tools=tools,
+                system=system,
             )
         elif provider == "openai":
             self.llm = OpenAICompletion(
                 configs=model_config,
                 tools=tools,
+                system=system,
             )
         else:
             raise ValueError("Invalid provider")
@@ -74,7 +127,7 @@ class Agent(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def prediction(
+    def predict(
         self,
         input: str | LLMMessage | list[LLMMessage],
     ) -> dict[str, Any]:
@@ -89,23 +142,56 @@ class Debiaser(Agent):
             GENDER_BIAS_MULTI_LABEL_CLASSIFIER,
             DEBIASER,
         ],
+        system=DEBIASER_SYSTEM_PROMPT.format(),
     ):
-        super().__init__(provider, tools)
-        self._UNBIASED_OUTPUT = "UNBIASED"
-        self._DEBIASING_FAILURE_MSG = "Debiasing tool not activated"
+        super().__init__(provider, tools, system)
+        self._UNBIASED_OUTPUT = UNBIASED_OUTPUT
+        self._DEBIASING_FAILURE_MSG = DEBIASING_FAILURE_MSG
+        self._DEBIASING_SYSTEM_MSG = DEBIASER_SYSTEM_MSG
+        self._DEBIASING_USER_MSG = DEBIASER_USER_MSG.format()
 
+    @weave.op()
+    def generate_debias_prompt(
+        self,
+        bias_texts,
+        bias_labels,
+        scores,
+    ) -> str:
+        """
+        Generate the prompt text based on detected biases, labels, and scores.
+
+        Parameters:
+        bias_texts (list[str]): The texts where biases were detected.
+        bias_labels (list[str]): The labels of the detected biases.
+        scores (list[float]): The scores of the detected biases.
+
+        Returns:
+        str: The generated prompt text.
+        """
+        bias_details = ""
+        for text, label, score in zip(bias_texts, bias_labels, scores):
+            bias_details += f"This segment of the text '{text}' triggers a {label} bias detection with a score of {score}\n"
+
+        prompt = self._DEBIASING_SYSTEM_MSG.format(bias_details=bias_details)
+        return prompt
+
+    @weave.op()
     def execute_task(
         self,
         msgs,
     ) -> AgentResponse:
         msgs = msgs.copy()
+
         agent_response = AgentResponse(messages=msgs)
         text, tool, response = self.llm.get_answer(msgs)
         agent_response.llm_responses.append(response)
 
+        logger.info(f"LLM text: {text}")
+        logger.info(f"LLM tool: {tool}")
+
         # Determine whether there is gender bias in the text
         if tool and tool.name == GENDER_BIAS_MULTI_LABEL_CLASSIFIER.name:
-            logger.info("Debiaser tool detected")
+            logger.info("'gender_bias_classifier' tool activated")
 
             bias_label_detected = tool.arguments.get("bias_label", None)
             bias_text_detected = tool.arguments.get("bias_text", None)
@@ -123,6 +209,8 @@ class Debiaser(Agent):
                 )
             )
 
+            logger.info(f"Current agent response: {agent_response}")
+
             # Check if the classifier detected no bias. In this case, the text is considered unbiased.
             if len(bias_label_detected) == 1 and bias_label_detected[0] == "UNBIASED":
                 logger.info("Gender bias multilabel classifier detected no bias")
@@ -130,15 +218,10 @@ class Debiaser(Agent):
                 return agent_response
 
             # Otherwise, proceed with the debiasing process preparing the messages given the bias detected, i.e. format the prompt
-            # TODO: Important to capture this prompt in a separate function and with proper variable to track as a configuration
-            # i.e., there is a lever to change or try different version in order to check the agent performance...
-            tool_result_into_text = "Analyzing the previous text I have the following information about gender biases:\n"
-            for text, label, score in zip(
+            # for the user to debias the text. Take step 1 results and create a prompt for step 2
+            tool_result_into_text = self.generate_debias_prompt(
                 bias_text_detected, bias_label_detected, score_levels
-            ):
-                tool_result_into_text += (
-                    f"The text '{text}' contains {label} with score {score}\n"
-                )
+            )
 
             logger.info(tool_result_into_text)
 
@@ -147,18 +230,28 @@ class Debiaser(Agent):
                     role=LLMMessage.MessageRole.SYSTEM,
                     content=tool_result_into_text,
                 ),
-                # TODO: Here there is another user instruction or prompt
                 LLMMessage(
                     role=LLMMessage.MessageRole.USER,
-                    content="Now you will debias the text",
+                    content=self._DEBIASING_USER_MSG,
                 ),
             ]
 
-            text, tool, response = self.llm.get_answer(msgs)
+            logger.info(f"Current messages: {msgs}")
+
+            # Now that we are in step 2, we need to force the tool to be activated, because we are expecting the debiaser tool to be activated
+            # and make corrections to the text
+            logger.info("Executing step 2 of the agent")
+            # logger.info("Keep only the debiaser tool in the LLM tool inventory")
+            # self.llm.update_tools(tools=[DEBIASER])
+            logger.info(f"Current tools: {self.llm.tools} ")
+            logger.info("Forcing tool activation by setting force_tool=True")
+            text, tool, response = self.llm.get_answer(msgs, force_tool=True)
             agent_response.llm_responses.append(response)
 
             # Determine whether the debiaser tool was activated, i.e. step 2 of the agent execution, or control flow
             if tool and tool.name == DEBIASER.name:
+                logger.info("'debiaser' tool activated")
+
                 for r in tool.arguments["reasoning"]:
                     logger.info(r)
 
@@ -182,12 +275,16 @@ class Debiaser(Agent):
                 # and the text is considered biased.
                 logger.error(self._DEBIASING_FAILURE_MSG)
                 agent_response.response = self._DEBIASING_FAILURE_MSG
-                raise AgentError(self._DEBIASING_FAILURE_MSG, agent_response)
+                raise AgentError(agent_response.llm_responses, agent_response)
 
         agent_response.response = self._UNBIASED_OUTPUT
         return agent_response
 
-    def prediction(
+    @weave.op(
+        tracing_sample_rate=1.0,
+        call_display_name=lambda call: f"{call.func_name}__{datetime.now()}",
+    )
+    def predict(
         self,
         input: str | LLMMessage | list[LLMMessage],
     ) -> AgentPrediction:
@@ -228,3 +325,4 @@ class Debiaser(Agent):
                 )
                 prediction.output = tool.tool_results.get("debiasing_text", None)
         return prediction
+

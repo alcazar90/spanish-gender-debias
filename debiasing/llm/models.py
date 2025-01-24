@@ -34,6 +34,9 @@ class LLMModel(ABC):
     ) -> tuple[str, dict]:
         raise NotImplementedError
 
+    def update_tools(self, tools: list[LLMToolDefinition]):
+        self.tools = tools
+
 
 class AntrophicCompletion(LLMModel):
     def __init__(
