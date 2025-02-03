@@ -5,9 +5,10 @@ import requests
 from pydantic import BaseModel
 
 from debiasing.configs import logger, settings
-from debiasing.llm.utils import LLMMessage, LLMToolDefinition
+from debiasing.llm.utils import LLMMessage, LLMToolDefinition, TextPart, ToolPart
 
 
+# TODO: Create a decorator for LLMModel.get_answer to modify the behavior and implement ReACT...
 class ModelConfigs(BaseModel):
     max_tokens: int = settings.MAX_TOKENS
     temperature: float = settings.TEMPERATURE
@@ -33,6 +34,9 @@ class LLMModel(ABC):
     ) -> tuple[str, dict]:
         raise NotImplementedError
 
+    def update_tools(self, tools: list[LLMToolDefinition]):
+        self.tools = tools
+
 
 class AntrophicCompletion(LLMModel):
     def __init__(
@@ -53,9 +57,14 @@ class AntrophicCompletion(LLMModel):
         self,
         messages: list[LLMMessage],
         force_tool: bool = False,
-    ) -> tuple[str, dict]:
+    ) -> tuple[TextPart | None, ToolPart | None, dict]:
         parsed_messages = [
-            {"role": message.role.value, "content": message.content}
+            {
+                "role": "assistant"
+                if message.role.value == LLMMessage.MessageRole.SYSTEM.value
+                else message.role.value,
+                "content": message.content,
+            }
             for message in messages
         ]
 
@@ -101,14 +110,25 @@ class AntrophicCompletion(LLMModel):
             )
             logger.info(f"LLM Anthropic response: {response.text}")
 
-            # TODO: determine if the LLM response called a tool
             response.raise_for_status()
             response = response.json()
-            text = response["content"][0]["text"]
-            return text, response
+
+            # Obtain text and tool parts from the LLM response
+            text, tool = None, None
+            for msg in response["content"]:
+                if msg["type"] == "text":
+                    text = TextPart(
+                        text=msg["text"],
+                    )
+                elif msg["type"] == "tool_use":
+                    tool = ToolPart(
+                        name=msg["name"],
+                        arguments=msg["input"],
+                    )
+            return text, tool, response
         except requests.exceptions.RequestException as err:
             print(f"Request failed: {err}")
-            return str(err), {}
+            return str(err), None, {}
 
 
 class OpenAICompletion(LLMModel):
@@ -130,7 +150,7 @@ class OpenAICompletion(LLMModel):
         self,
         messages: list[LLMMessage],
         force_tool: bool = False,
-    ) -> tuple[str, dict]:
+    ) -> tuple[TextPart | None, ToolPart | None, dict]:
         parsed_messages = [
             {"role": message.role.value, "content": message.content}
             for message in messages
@@ -173,11 +193,22 @@ class OpenAICompletion(LLMModel):
 
             logger.info(f"LLM OpenAI response: {response.text}")
 
-            # TODO: determine if the LLM response called a tool
             response.raise_for_status()
             response = response.json()
-            text = response["choices"][0]["message"]["content"]
-            return text, response
+
+            # Obtain text and tool parts from the LLM response
+            text, tool = None, None
+            text_info = response["choices"][0]["message"]["content"]
+            tool_info = response["choices"][0]["message"].get("tool_calls", None)
+            if text_info:
+                text = TextPart(text=text_info)
+            if tool_info:
+                tool = ToolPart(
+                    name=tool_info[0]["function"]["name"],
+                    arguments=json.loads(tool_info[0]["function"]["arguments"]),
+                )
+            return text, tool, response
         except requests.exceptions.RequestException as err:
             print(f"Request failed: {err}")
-            return str(err), {}
+            print(f"response content: {response.content}")
+            return str(err), None, {}
