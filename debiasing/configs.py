@@ -38,7 +38,7 @@ class Settings(BaseSettings):
     # General LLM configs
     LLM_TIMEOUT: int = 15
     TEMPERATURE: float = 0.0
-    MAX_TOKENS: int = 600
+    MAX_TOKENS: int = 2500
 
     model_config: ConfigDict = SettingsConfigDict(
         # env files are overwritten in reverse order of preference.

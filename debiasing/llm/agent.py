@@ -11,6 +11,51 @@ from debiasing.configs import settings
 
 client = weave.init(settings.WANDB_PROJECT)
 
+# Critic agent for the debiaser agent
+# CRITIC_SYSTEM_PROMPT = weave.StringPrompt(
+# """You are a linguistic expert specialized in criticizing the debiasing process of a text.
+# You are tasked with evaluating the debiasing process of a text that has been analyzed
+# and provide feedback on the quality of the debiasing process. Think that the plan
+# is for provide guidance to your pupil in the debiasing process. Indicate the
+# strengths and weaknesses of the debiasing process, and suggest improvements.
+
+# If you don't have any feedback, you can end the process by returning just the message: 'SUCCESSFULLY_DEBIASED'
+# """
+# )
+
+CRITIC_SYSTEM_PROMPT = weave.StringPrompt(
+"""You are a linguistic expert specializing in evaluating and refining the debiasing process of a text. 
+Your goal is to provide constructive feedback that helps improve the quality of the debiased text while 
+ensuring fairness, neutrality, and clarity.
+
+## **Instructions:**
+1. **Assess the Debiased Text:**
+   - Check if the debiased text is completely free of biases.
+   - If there is absolutely no bias or room for improvement, **you must return exactly this response:**
+     ```
+     SUCCESSFULLY_DEBIASED
+     ```
+     **Do not add anything else, no punctuation, no extra words, no explanations.**
+   - If there is room for improvement, proceed to the next step.
+
+2. **Analyze the Reasoning Behind the Debiasing:**
+   - Is the provided reasoning logically sound?
+   - Does it justify the changes effectively?
+   - Are there alternative debiasing strategies that could be more effective?
+
+3. **Provide Feedback If Refinements Are Needed:**
+   - If the debiasing is **partially effective but needs refinements**, highlight specific areas of improvement.
+   - If the debiasing **failed or introduced new biases**, clearly explain the issue and suggest a revised approach.
+
+## **Critical Rule:**
+- If the text is **perfectly debiased** and **does not require changes**, return **only**:
+SUCCESSFULLY_DEBIASED
+
+**Do not return explanations, extra text, punctuation, or formatting changes.**
+
+Your role is to act as a **mentor guiding the debiasing agent to achieve the most neutral and fair text possible**.
+"""
+)
 
 # System prompt to instantiate the LLM used by the Debiaser agent
 DEBIASER_SYSTEM_PROMPT = weave.StringPrompt("""You are a linguistic expert in gender bias analysis specialized in Spanish language communication. 
@@ -104,6 +149,7 @@ class Agent(ABC):
         system=None,
         model_config=ModelConfigs(max_tokens=400, temperature=0.8),
     ):
+        self.provider = provider
         if provider == "anthropic":
             self.llm = AntrophicCompletion(
                 configs=model_config,
@@ -126,12 +172,41 @@ class Agent(ABC):
     ) -> AgentResponse:
         raise NotImplementedError
 
-    @abstractmethod
     def predict(
         self,
         input: str | LLMMessage | list[LLMMessage],
     ) -> dict[str, Any]:
         raise NotImplementedError
+
+
+class DebiaserCritic(Agent):
+    def __init__(
+        self,
+        provider="anthropic",
+        tools=None,
+        system=CRITIC_SYSTEM_PROMPT.format(),
+    ):
+        super().__init__(provider, tools, system)
+
+    def generate_critic_prompt(
+        self,
+        debiasing_text: str,
+        reasoning: list[str],
+    ) -> str:
+        pass
+
+    def execute_task(
+        self,
+        msgs,
+    ) -> AgentResponse:
+        msgs = msgs.copy()
+        agent_response = AgentResponse(messages=msgs)
+
+        # Get the response from the LLM
+        text, _, response = self.llm.get_answer(msgs)
+        agent_response.llm_responses.append(response)
+        agent_response.response = text.text.strip()  # TextPart, no tool activated
+        return agent_response
 
 
 class Debiaser(Agent):
@@ -143,12 +218,14 @@ class Debiaser(Agent):
             DEBIASER,
         ],
         system=DEBIASER_SYSTEM_PROMPT.format(),
+        max_reasoning_steps=3,  # Set max iterations for reasoning loop
     ):
         super().__init__(provider, tools, system)
         self._UNBIASED_OUTPUT = UNBIASED_OUTPUT
         self._DEBIASING_FAILURE_MSG = DEBIASING_FAILURE_MSG
         self._DEBIASING_SYSTEM_MSG = DEBIASER_SYSTEM_MSG
         self._DEBIASING_USER_MSG = DEBIASER_USER_MSG.format()
+        self.max_reasoning_steps = max_reasoning_steps
 
     @weave.op()
     def generate_debias_prompt(
@@ -236,46 +313,145 @@ class Debiaser(Agent):
                 ),
             ]
 
+            agent_response.messages.extend(msgs[-2:])
             logger.info(f"Current messages: {msgs}")
 
             # Now that we are in step 2, we need to force the tool to be activated, because we are expecting the debiaser tool to be activated
             # and make corrections to the text
             logger.info("Executing step 2 of the agent")
-            # logger.info("Keep only the debiaser tool in the LLM tool inventory")
-            # self.llm.update_tools(tools=[DEBIASER])
             logger.info(f"Current tools: {self.llm.tools} ")
             logger.info("Forcing tool activation by setting force_tool=True")
             text, tool, response = self.llm.get_answer(msgs, force_tool=True)
             agent_response.llm_responses.append(response)
 
+            logger.info(f"LLM response before checking 1st debiaser tool activation: {response}")
             # Determine whether the debiaser tool was activated, i.e. step 2 of the agent execution, or control flow
             if tool and tool.name == DEBIASER.name:
+                debiasing_text = tool.arguments["debiasing_text"]
+                reasoning = tool.arguments["reasoning"]
                 logger.info("'debiaser' tool activated")
+                logger.info("Debiased text: " + debiasing_text)
 
-                for r in tool.arguments["reasoning"]:
+                for r in reasoning:
                     logger.info(r)
 
-                # Save the results of the debiasing process, i.e. the debiased text and the reasoning
+                # Save the results of the debiasing process, i.e. the debiased text and the reasonin
                 agent_response.tool_activations.append(
                     ToolActivation(
                         tool_name=tool.name,
                         tool_results={
-                            "debiasing_text": tool.arguments["debiasing_text"],
-                            "reasoning": tool.arguments["reasoning"],
+                            "debiasing_text": debiasing_text,
+                            "reasoning": reasoning,
                         },
                         step_id=2,
                     )
                 )
-                # TODO: insert a "reasoning loop" that works with another LLM about the reasons give by the tool
+
+                # Append a system message with the debiased text and the reasoning behind the debiasing
+                # and a user message to ask for feedback on the debiasing process
+                msgs += [
+                    LLMMessage(
+                        role=LLMMessage.MessageRole.SYSTEM,
+                        content="Here is the debiased version: '"  + debiasing_text +  "' and the reasoning behind the debiasing: '" + ','.join(reasoning) + "'",
+                    ),
+                    LLMMessage(
+                        role=LLMMessage.MessageRole.USER,
+                        content="Do you have any feedback on the debiasing process?",
+                    ),
+                    # None if self.max_reasoning_steps == 0 else LLMMessage(
+                    #     role=LLMMessage.MessageRole.USER,
+                    #     content="Do you have any feedback on the debiasing process?",
+                    # )
+                ]
+
+                agent_response.messages.extend(msgs[-2:])
+
+                # A "reasoning loop" that works with another LLM about the reasons give by the tool
                 # trying to iterate and ask for more information about the bias detected
-                agent_response.response = tool.arguments["debiasing_text"]
+                critic = DebiaserCritic(provider="anthropic")
+
+                for i in range(self.max_reasoning_steps):
+                    logger.info(f"Starting reasoning iteration {i + 1}")
+
+                    critic_response = critic.execute_task(agent_response.messages)
+                    agent_response.llm_responses.append(critic_response.llm_responses)
+
+                    # Stop the loop if no new feedback is given
+                    if not critic_response.response:
+                        logger.info("No further feedback provided, ending iteration")
+                        break
+                    elif critic_response.response == "SUCCESSFULLY_DEBIASED":
+                        logger.info("The debiasing process has been successfully completed")
+                        break
+
+                    logger.info(f"Critic feedback: {critic_response.response}")
+
+                    # Modify the input for the next iteration
+                    # feedback_msg = f"Here is my feedback to incorporate in the debiasing process: {critic_response.response}"
+
+                    if i < self.max_reasoning_steps - 1:
+                        msgs += [
+                            LLMMessage(
+                                role=LLMMessage.MessageRole.SYSTEM,
+                                content=critic_response.response,
+                            ),
+                            LLMMessage(
+                                role=LLMMessage.MessageRole.USER,
+                                # NOTE: Se menciona que se use el feedback Y la herramienta debiaser tool para continuar el refinamiento
+                                content="Use the debiaser tool and the feedback provide to refine the debiasing process and proposed a new debiased text",
+                            ),
+                        ]
+                    elif i == self.max_reasoning_steps - 1:
+                        # If the maximum number of reasoning steps is reached, end the debiasing process
+                        msgs += [
+                            LLMMessage(
+                                role=LLMMessage.MessageRole.SYSTEM,
+                                content=critic_response.response,
+                            ),
+                            LLMMessage(
+                                role=LLMMessage.MessageRole.USER,
+                                content="The maximum number of reasoning steps has been reached, ending the debiasing process",
+                            ),
+                        ]
+
+                    agent_response.messages.extend(msgs[-2:])
+
+                    text, tool, response = self.llm.get_answer(msgs, force_tool=True)
+                    agent_response.llm_responses.append(response)
+
+                    if tool and tool.name == DEBIASER.name:
+                        debiasing_text = tool.arguments["debiasing_text"]
+                        reasoning = tool.arguments["reasoning"]
+
+                        agent_response.tool_activations.append(
+                            ToolActivation(
+                                tool_name=tool.name,
+                                tool_results={
+                                    "debiasing_text": debiasing_text,
+                                    "reasoning": reasoning,
+                                },
+                                step_id=i + 3,
+                            )
+                        )
+                    else:
+                        logger.info(
+                            "Debiaser tool failed to activate, stopping refinement"
+                        )
+                        break
+                agent_response.response = debiasing_text
+                agent_response.messages.append(
+                    LLMMessage(
+                        role=LLMMessage.MessageRole.SYSTEM,
+                        content="The debiasing process has been completed. THe final debiased text is: '" + debiasing_text + "'",
+                    )
+                )
                 return agent_response
-            else:
-                # If the debiaser tool was not activated, return an AgentError which means the debiasing process failed
-                # and the text is considered biased.
-                logger.error(self._DEBIASING_FAILURE_MSG)
-                agent_response.response = self._DEBIASING_FAILURE_MSG
-                raise AgentError(agent_response.llm_responses, agent_response)
+
+            # If the debiaser tool was not activated, return an AgentError which means the debiasing process failed
+            # and the text is considered biased.
+            logger.error(self._DEBIASING_FAILURE_MSG)
+            agent_response.response = self._DEBIASING_FAILURE_MSG
+            raise AgentError(agent_response.llm_responses, agent_response)
 
         agent_response.response = self._UNBIASED_OUTPUT
         return agent_response
@@ -325,4 +501,3 @@ class Debiaser(Agent):
                 )
                 prediction.output = tool.tool_results.get("debiasing_text", None)
         return prediction
-

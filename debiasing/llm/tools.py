@@ -291,12 +291,24 @@ class DebiasingText(
     }
 
 
+# DEBIASING_TEXT_DESCRIPTION = weave.StringPrompt("""
+# A sophisticatrd text analysis and modification tool designed to detect and neutralize gender biases in text. The tool performs a precise linguistic intervention, identifying specific gender bias types and transforming the text to use inclusive language while meticulously preserving the original semantic meaning and communicative intent.
+# """)
+
 DEBIASING_TEXT_DESCRIPTION = weave.StringPrompt("""
-A sophisticated text analysis and modification tool designed to detect and neutralize gender biases in text. The tool performs a precise linguistic intervention, identifying specific gender bias types and transforming the text to use inclusive language while meticulously preserving the original semantic meaning and communicative intent.
+A sophisticated text analysis and modification tool designed to detect and neutralize gender biases in text. 
+The tool performs a precise linguistic intervention, identifying specific gender bias types and transforming the text to use inclusive language while meticulously preserving the original semantic meaning and communicative intent.
+The response should include:
+1. The original biased text.
+2. The neutralized version of the text, with all biases removed.
+3. A detailed explanation of how the debiasing was applied, including the rationale and specific linguistic strategies used.
+Ensure that all three pieces of information are included in the response.
 """)
+
+
 weave.publish(DEBIASING_TEXT_DESCRIPTION, name="DEBIASING_TEXT_DESCRIPTION")
 
-# A text analysis and modification tool desgiend for debiasing a text that contain gender biases. The fragment of the text will be given with the specific gender bias detected, your work is neutralize the biases applying minimal modifications and present a debiased text version while preserving the original meaning and context.
+# A text analysis and modification tool desgiend for debiasing a text that contain grnder biases. The fragment of the text will be given with the specific gender bias detected, your work is neutralize the biases applying minimal modifications and present a debiased text version while preserving the original meaning and context.
 
 DEBIASER = LLMToolDefinition(
     name="debiaser",
