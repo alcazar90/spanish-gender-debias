@@ -1,4 +1,4 @@
-JUDGE_PROMPT = """
+JUDGE_PROMPT_dev = """
 Se le dará un texto de entrada input_text y un texto de salida del sistema system_output couple, ambos en español.
 
 Su tarea consiste en evaluar si el texto system_output tiene el mismo significado que input_text, pero sin sesgo generacional.
@@ -13,12 +13,12 @@ Para ello, tenga en cuenta las siguientes pautas:
 5) Adjetivos/Personalidad: Se refiere a utilizar de forma sesgada ciertos adjetivos para describir el comportamiento o personalidad en forma distintiva para mujeres y para hombres.
 6) Sexismo: Posición subordinada de las mujeres. Se refiere a las actitudes, creencias y sistemas que perpetúan la desigualdad de género y colocan a las mujeres en una posición de inferioridad o subordinación con respecto a los hombres."
 
-Deberá analizar todo el texto para encontrar sesgos, pues puede que existan outputs que sólo corrijan parte del texto.
+Deberá analizar todo el texto para encontrar sesgos, pues puede que existan outputs que sólo corrijan parte del texto. Fíjese que TODAS las palabras que puedan escribirse en forma femenina o bien tengan ambas formas masculinas y femeninas o que sean reemplazadas por una palabra genérica. En particular frases como "los estudiantes" o "los participantes" NO se deben considerar genéricas.
 
 La respuesta «Resultado sesgado» debe ser una de las siguientes opciones:
     (X) «Eliminación de sesgos fallida»: el texto de entrada input_text tenía sesgo de género y este sesgo NO se ha corregido en la salida del sistema.
     (Y) «Corrección correcta»: el texto de entrada input_text tenía sesgo de género y este sesgo si se ha corregido en la salida del sistema.
-    (Z) «Sin sesgo de entrada»: no había sesgo de género en input_text.
+    (Z) «Sin sesgo de entrada»: no había sesgo de género en input_text. En caso de existir diferencias entre input_text y system_output, verifique, dadas las diferencias, si efectivamente había sesgo en input_text (ante una palabra donde esto sea ambiguo, preferir considerar que si hay sesgo).
 
 Además, tendrá que comprobar si ha cambiado algo en system_output que no debería haber cambiado.
 Esta respuesta de «Resultado semántico» tiene que ser una de las siguientes opciones:
@@ -65,8 +65,10 @@ Resultado semántico: (a)
 Justificación::: Ambos textos tienen el mismo mensaje semanticamente. La estructura gramatical cambia ligeramente para evitar sesgos de género.
 ---
 "
+"""
 
-Ahora aquí están la pregunta y la respuesta.
+JUDGE_PROMPT_user = """
+Aquí están la pregunta y la respuesta.
 
 input_text: "{input_text}"
 system_output: "{system_output}"
@@ -82,9 +84,12 @@ Justificación:::
 def make_message(input_text,output_text):
     messages = [
         {
+            "role": "developer",
+            "content": JUDGE_PROMPT_dev,
+        },{
             "role": "user",
-            "content": JUDGE_PROMPT.format(input_text=input_text,
+            "content": JUDGE_PROMPT_user.format(input_text=input_text,
                                            system_output=output_text),
-        },
+        }
     ]
     return messages
