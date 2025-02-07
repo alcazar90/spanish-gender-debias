@@ -1,12 +1,41 @@
+import os
 import weave
 from enum import StrEnum
 from pydantic import BaseModel, Field
 from debiasing.llm.utils import LLMToolDefinition
 
 from debiasing.configs import settings
+from debiasing.configs import logger
 
 client = weave.init(settings.WANDB_PROJECT)
 
+# Get the directory of the current script
+DEBIASING_PROMPT_EXAMPLES = "debiasing_example.txt"
+CLASSIFIER_PROMPT_EXAMPLES = "biases_example.txt"
+
+script_dir = os.path.dirname(__file__)
+classifier_file_path = os.path.join(script_dir, CLASSIFIER_PROMPT_EXAMPLES)
+debiasing_file_path = os.path.join(script_dir, DEBIASING_PROMPT_EXAMPLES)
+
+# Read the classifier example file
+try:
+    with open(classifier_file_path, "r", encoding="utf-8") as f:
+        _BIASES_PROMPT_EXAMPLES = f.read()
+        logger.info(f"File {CLASSIFIER_PROMPT_EXAMPLES} read successfully.")
+except FileNotFoundError:
+    print(f"The file {CLASSIFIER_PROMPT_EXAMPLES} was not found.")
+except IOError as e:
+    print(f"An I/O error occurred: {e}")
+
+# Read the debiasing example file
+try:
+    with open(debiasing_file_path, "r", encoding="utf-8") as f:
+        _DEBIASER_PROMPT_EXAMPLES = f.read()
+        logger.info(f"File {DEBIASING_PROMPT_EXAMPLES} read successfully.")
+except FileNotFoundError:
+    print(f"The file {DEBIASING_PROMPT_EXAMPLES} was not found.")
+except IOError as e:
+    print(f"An I/O error occurred: {e}")
 
 # Define a simple calculator tool using BaseModel
 # This is a dummy calculator tool for showing how to define a tool and for testing purposes
@@ -122,55 +151,16 @@ GENDER_BIAS_CLASSIFIER_DESCRIPTION += "\n\n".join(
 
 GENDER_BIAS_CLASSIFIER_DESCRIPTION += "Don't return None if no bias is detected."
 
+# Provide examples of biases to detect in the text
+GENDER_BIAS_CLASSIFIER_DESCRIPTION += _BIASES_PROMPT_EXAMPLES
+GENDER_BIAS_CLASSIFIER_DESCRIPTION += "Remember the response should include the bias_label, the bias_text and the score_label for each bias detected. Otherwise, no bias detected, return UNBIASED or don't activate the tool"
+
 GENDER_BIAS_CLASSIFIER_DESCRIPTION = weave.StringPrompt(
     GENDER_BIAS_CLASSIFIER_DESCRIPTION
 )
 weave.publish(
     GENDER_BIAS_CLASSIFIER_DESCRIPTION, name="GENDER_BIAS_CLASSIFIER_DESCRIPTION"
 )
-
-
-# GENDER_BIAS_CLASSIFIER_DESCRIPTION = """
-# This tool identifies one or more gender biases in a given text. The tool performs a multi-label classification to detect specific gender biases and specifies the parts of the text that contain these biases. The following gender biases are detected:
-
-# 1. GENERIC_PRONOUNS:
-#    - Description: Generic pronouns bias is the use of gender-specific pronouns when a gender-neutral pronoun would be more appropriate.
-#    - When to use: Use this bias when the text uses gender-specific pronouns instead of gender-neutral pronouns.
-#    - Caveats: Ensure that the context of the pronoun usage is considered to avoid false positives.
-#    - Limitations: May not detect biases in languages with less clear gender-neutral pronouns.
-
-# 2. STEREOTYPING_BIAS:
-#    - Description: Stereotyping bias is the use of stereotypes to make assumptions about a person's abilities, interests, or characteristics.
-#    - When to use: Use this bias when the text makes stereotypical assumptions about individuals based on their gender.
-#    - Caveats: Be cautious of cultural differences in stereotypes.
-#    - Limitations: May not detect subtle or implicit stereotypes.
-
-# 3. SEXISM:
-#    - Description: Sexism can be defined as discrimination, stereotyping, or prejudice based on one's sex.
-#    - When to use: Use this bias when the text contains discriminatory or prejudiced statements based on gender.
-#    - Caveats: Context is crucial to accurately identify sexism.
-#    - Limitations: May not detect indirect or nuanced sexism.
-
-# 4. EXCLUSIONARY_TERMS:
-#    - Description: Exclusionary terms bias is the use of terms that exclude or marginalize a particular gender, often by using male-oriented terms as the default.
-#    - When to use: Use this bias when the text uses terms that exclude or marginalize a gender.
-#    - Caveats: Consider the historical and cultural context of the terms.
-#    - Limitations: May not detect biases in languages with gender-neutral terms.
-
-# 5. SEMANTIC_BIAS:
-#    - Description: Semantic bias is the use of words or phrases that have a gendered connotation, which can reinforce stereotypes or biases.
-#    - When to use: Use this bias when the text uses gendered words or phrases that reinforce stereotypes.
-#    - Caveats: Be aware of the context in which the words or phrases are used.
-#    - Limitations: May not detect subtle or context-dependent semantic biases.
-
-# 6. UNBIASED:
-#    - Description: No gender bias detected.
-#    - When to use: Use this label when the text does not contain any detectable gender biases.
-#    - Caveats: Ensure thorough analysis to confirm the absence of bias.
-#    - Limitations: May not account for all possible biases.
-
-# This tool should not be used for texts where gender biases are not relevant or where the context requires gender-specific language. The tool's output includes a list of detected biases, the specific parts of the text that trigger these biases, and a confidence score for each bias detected.
-# """
 
 
 # This kind of tool is a structured output, i.e. complete a json schema for the output, in this case, the output is the bias_label and the bias_text
@@ -297,13 +287,17 @@ class DebiasingText(
 
 DEBIASING_TEXT_DESCRIPTION = weave.StringPrompt("""
 A sophisticated text analysis and modification tool designed to detect and neutralize gender biases in text. 
-The tool performs a precise linguistic intervention, identifying specific gender bias types and transforming the text to use inclusive language while meticulously preserving the original semantic meaning and communicative intent.
+The tool performs a precise linguistic intervention, identifying specific gender bias types and transforming the text to use inclusive language while meticulously preserving the original semantic meaning and communicative intent in spanish.
 The response should include:
 1. The original biased text.
 2. The neutralized version of the text, with all biases removed.
 3. A detailed explanation of how the debiasing was applied, including the rationale and specific linguistic strategies used.
 Ensure that all three pieces of information are included in the response.
-""")
+
+{debiasing_example}
+                                                
+Provide the debiased version and a detailed explanation of the debiasing process, including the rationale and specific linguistic strategies used. Ensure that the original meaning and context of the text are preserved while making minimal changes to the wording.
+""".format(debiasing_example=_DEBIASER_PROMPT_EXAMPLES))
 
 
 weave.publish(DEBIASING_TEXT_DESCRIPTION, name="DEBIASING_TEXT_DESCRIPTION")
