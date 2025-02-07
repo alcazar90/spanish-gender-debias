@@ -108,12 +108,6 @@ class GenderBiasesEnum(StrEnum):
 GENDER_BIAS_CLASSIFIER_DESCRIPTION = (
     "Identify (if any) one ore more of the following gender biases in the text:\n"
 )
-# GENDER_BIAS_CLASSIFIER_DESCRIPTION += "\n\n".join(
-#     [
-#         f"{gender.name}: {gender.description}\n -> Examples: {';'.join(gender.examples)}"
-#         for gender in GenderBiasesEnum
-#     ]
-# )
 
 GENDER_BIAS_CLASSIFIER_DESCRIPTION += "\n\n".join(
     [f"{gender.name}: {gender.description}\n" for gender in GenderBiasesEnum]
@@ -197,14 +191,9 @@ class MultiLabelGenderBiasClassifier(
 
 
 # Now we will define Multi-label gender bias classifier tool using LLMToolDefinition
-# TODO: Improve the description of the tool and use GENDER_BIAS_CLASSIFIER_DESCRIPTION, currently
-# the description is passing as a system prompt to the model (see debiasing-doc.ipynb). See the documentation
-# and best practices in OpenAI and Anthropic for defining the description of the tool, as well as the number of
-# characters allowed for the description.
 GENDER_BIAS_MULTI_LABEL_CLASSIFIER = LLMToolDefinition(
     name="gender_bias_classifier",
     description=GENDER_BIAS_CLASSIFIER_DESCRIPTION.format(),
-    # description="Identify gender biases in a given text (if any) and for each bias specify in which specific part of the text is located. Therefore, there is a correspondence between the bias_label and the bias_text.",
     inputSchema=MultiLabelGenderBiasClassifier.model_json_schema(),
     structured_output=True,
 )
@@ -231,8 +220,6 @@ class DebiasingText(
     )
     reasoning: list[str] = Field(
         description="A detailed linguistic breakdown explaining the specific debiasing decisions made. Each entry describes: 1) The original biased text segment, 2) The detected bias type, 3) The rationale for the modification, 4) The specific inclusive language strategy used. This provides transparency into how and why the text was neutralized.",
-        # description="Detailed explanation of each debiasing decision, including linguistic and cultural considerations.",
-        # title="reasoning",
         title="Debiasing Reasoning",
         example=[
             "Original phrase 'A programmer must carry his laptop' contained a Generic Pronouns bias. Replaced gender-specific 'his' with gender-neutral 'their' to ensure inclusive language while preserving the original meaning."
