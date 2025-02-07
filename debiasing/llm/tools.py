@@ -37,40 +37,10 @@ except FileNotFoundError:
 except IOError as e:
     print(f"An I/O error occurred: {e}")
 
-# Define a simple calculator tool using BaseModel
-# This is a dummy calculator tool for showing how to define a tool and for testing purposes
-class Calculator(BaseModel):
-    """A simple calculator tool"""
-
-    operation: str
-    number1: int
-    number2: int
-
-    model_config = {
-        "json_schema_extra": {
-            "required": [
-                "operation",
-                "number1",
-                "number2",
-            ],
-            "additionalProperties": False,
-        }
-    }
-
-
-CALCULATOR_DESCRIPTION = "A simple calculator tool that performs basic arithmetic operations and can be used to identify the result of the operation in a user request."
-CALCULATOR = LLMToolDefinition(
-    name="calculator",
-    description=CALCULATOR_DESCRIPTION,
-    inputSchema=Calculator.model_json_schema(),
-    structured_output=False,
-)
-
 
 # Define a GenderBiasesEnum class with the different kind of biases to detect in the text, providing
 # a description and examples for each one...
 # Best tool practices: https://docs.anthropic.com/en/docs/build-with-claude/tool-use#best-practices-for-tool-definitions
-# TODO: Improve gender descriptions and examples provides (in spanish (?)) ask for support to Darinka
 class GenderBiasesEnum(StrEnum):
     """Kind of gender biases to detect in the text
     Ref: Based on Table 2 from work https://arxiv.org/pdf/2201.08675
