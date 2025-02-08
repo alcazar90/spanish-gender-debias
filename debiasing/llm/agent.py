@@ -1,6 +1,10 @@
 import weave
-from abc import ABC, abstractmethod
+
+from abc import ABC
+from abc import abstractmethod
 from datetime import datetime
+from debiasing.configs import logger
+from debiasing.configs import settings
 from debiasing.llm.models import AntrophicCompletion
 from debiasing.llm.models import ModelConfigs
 from debiasing.llm.models import OpenAICompletion
@@ -10,16 +14,16 @@ from debiasing.llm.prompts import CRITIC_SYSTEM_PROMPT
 from debiasing.llm.prompts import DEBIASER_SYSTEM_PROMPT
 from debiasing.llm.prompts import DEBIASER_SYSTEM_MSG
 from debiasing.llm.prompts import DEBIASER_USER_MSG
-from debiasing.configs import logger
 from debiasing.llm.utils import LLMMessage
 from typing import Any
-from pydantic import BaseModel, Field
-from debiasing.configs import settings
+from pydantic import BaseModel
+from pydantic import Field
 
 
 # Output message when the text is considered unbiased and the debiasing process fails
 UNBIASED_OUTPUT = "UNBIASED"
 DEBIASING_FAILURE_MSG = "Debiasing tool not activated"
+
 
 class ToolActivation(BaseModel):
     """Log of the tools activated and their results during the execution"""
@@ -66,8 +70,10 @@ class Agent(ABC):
         provider="anthropic",
         tools=None,
         system=None,
-        model_config=ModelConfigs(max_tokens=settings.MAX_TOKENS, 
-                                  temperature=settings.TEMPERATURE,),
+        model_config=ModelConfigs(
+            max_tokens=settings.MAX_TOKENS,
+            temperature=settings.TEMPERATURE,
+        ),
     ):
         self.provider = provider
         if provider == "anthropic":
@@ -244,7 +250,9 @@ class Debiaser(Agent):
             text, tool, response = self.llm.get_answer(msgs, force_tool=True)
             agent_response.llm_responses.append(response)
 
-            logger.info(f"LLM response before checking 1st debiaser tool activation: {response}")
+            logger.info(
+                f"LLM response before checking 1st debiaser tool activation: {response}"
+            )
             # Determine whether the debiaser tool was activated, i.e. step 2 of the agent execution, or control flow
             if tool and tool.name == DEBIASER.name:
                 debiasing_text = tool.arguments["debiasing_text"]
@@ -272,7 +280,11 @@ class Debiaser(Agent):
                 msgs += [
                     LLMMessage(
                         role=LLMMessage.MessageRole.SYSTEM,
-                        content="Here is the debiased version: '"  + debiasing_text +  "' and the reasoning behind the debiasing: '" + ','.join(reasoning) + "'",
+                        content="Here is the debiased version: '"
+                        + debiasing_text
+                        + "' and the reasoning behind the debiasing: '"
+                        + ",".join(reasoning)
+                        + "'",
                     ),
                     LLMMessage(
                         role=LLMMessage.MessageRole.USER,
@@ -301,7 +313,9 @@ class Debiaser(Agent):
                         logger.info("No further feedback provided, ending iteration")
                         break
                     elif critic_response.response == "SUCCESSFULLY_DEBIASED":
-                        logger.info("The debiasing process has been successfully completed")
+                        logger.info(
+                            "The debiasing process has been successfully completed"
+                        )
                         break
 
                     logger.info(f"Critic feedback: {critic_response.response}")
@@ -362,7 +376,9 @@ class Debiaser(Agent):
                 agent_response.messages.append(
                     LLMMessage(
                         role=LLMMessage.MessageRole.SYSTEM,
-                        content="The debiasing process has been completed. THe final debiased text is: '" + debiasing_text + "'",
+                        content="The debiasing process has been completed. THe final debiased text is: '"
+                        + debiasing_text
+                        + "'",
                     )
                 )
                 return agent_response
@@ -376,16 +392,17 @@ class Debiaser(Agent):
         agent_response.response = self._UNBIASED_OUTPUT
         return agent_response
 
-    @weave.op(
-        tracing_sample_rate=1.0,
-        call_display_name=lambda call: f"{call.func_name}__{datetime.now()}",
-    )
-    def predict(
-        self,
-        input: str | LLMMessage | list[LLMMessage],
+
+class DebiaserModel(weave.Model):
+    llm_provider: str
+    max_reasoning_steps: int
+
+    @weave.op()
+    def predict(self, 
+                input: str | LLMMessage | list[LLMMessage]
     ) -> AgentPrediction:
         """
-        Predict the output of the agent given an input message or a list of messages
+        Predict the output of the Debiaser Agent given an input message or a list of messages
         """
         # Capture the input
         if isinstance(input, str):
@@ -394,30 +411,28 @@ class Debiaser(Agent):
         elif isinstance(input, LLMMessage):
             input_str = input.content
             input = [input]
-        elif isinstance(input, list) and all(
-            isinstance(msg, LLMMessage) for msg in input
-        ):
+        elif isinstance(input, list) and all(isinstance(msg, LLMMessage) for msg in input):
             input_str = input[0].content
         else:
             raise ValueError("Invalid input type")
 
-        debiaser_response = self.execute_task(input)
+        # Initialize the Debiaser Agent
+        client = Debiaser(
+            provider=self.llm_provider,
+            max_reasoning_steps=self.max_reasoning_steps,
+        )
+
+        response = client.execute_task(input)
 
         # Create an AgentPrediction object
-        prediction = AgentPrediction(input=input_str, output=self._UNBIASED_OUTPUT)
+        prediction = AgentPrediction(input=input_str, output=client._UNBIASED_OUTPUT)
 
         # Parse the debiaser response into the output dictionary
-        for tool in debiaser_response.tool_activations:
+        for tool in response.tool_activations:
             if tool.tool_name == GENDER_BIAS_MULTI_LABEL_CLASSIFIER.name:
-                prediction.biases = ", ".join(
-                    tool.tool_results.get("bias_labels", [""])
-                )
-                prediction.scores = ", ".join(
-                    [str(score) for score in tool.tool_results.get("scores", [""])]
-                )
+                prediction.biases = ", ".join(tool.tool_results.get("bias_labels", [""]))
+                prediction.scores = ", ".join([str(score) for score in tool.tool_results.get("scores", [""])])
             elif tool.tool_name == DEBIASER.name:
-                prediction.debias_reasoning = ", ".join(
-                    tool.tool_results.get("reasoning", [""])
-                )
+                prediction.debias_reasoning = ", ".join(tool.tool_results.get("reasoning", [""]))
                 prediction.output = tool.tool_results.get("debiasing_text", None)
         return prediction
