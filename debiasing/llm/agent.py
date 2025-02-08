@@ -14,16 +14,26 @@ from debiasing.llm.prompts import DEBIASER_SYSTEM_PROMPT
 from debiasing.llm.prompts import DEBIASER_SYSTEM_MSG
 from debiasing.llm.prompts import DEBIASER_USER_MSG
 from debiasing.llm.utils import LLMMessage
+from enum import StrEnum
 from typing import Any
 from pydantic import BaseModel
 from pydantic import Field
 
-# TODO: Expand AgentResponse to include a agent id to identify the agent that generated the response
-# TODO: Add an identifier in each weave.op() associated with the agent that generated the response
+
+# Constants for the debiasing process
 
 # Output message when the text is considered unbiased and the debiasing process fails
 UNBIASED_OUTPUT = "UNBIASED"
 DEBIASING_FAILURE_MSG = "Debiasing tool not activated"
+
+
+class AgentType(StrEnum):
+    """Enum for different types of agents in the debiasing system"""
+
+    DEBIASER = "debiaser"
+    BIAS_DETECTOR = "bias_detector"
+    BIAS_NEUTRALIZER = "bias_neutralizer"
+    DEBIASER_CRITIC = "debiaser_critic"
 
 
 class ToolActivation(BaseModel):
@@ -47,6 +57,13 @@ class AgentResponse(BaseModel):
         None,
         description="The response of the agent after the execution of the task, it represents a terminal state in the agent's control flow",
     )
+    agent_type: AgentType = Field(
+        ...,
+        description="Type of the agent that generated the response",
+    )
+
+    class Config:
+        use_enum_values = True  # This will serialize the enum to its value
 
 
 class AgentPrediction(BaseModel):
@@ -113,17 +130,29 @@ class BiasDetector(Agent):
         provider="anthropic",
         tools=[GENDER_BIAS_MULTI_LABEL_CLASSIFIER_TOOL],
         system=None,  # You'll need to define DETECTOR_SYSTEM_PROMPT
+        model_config=ModelConfigs(
+            max_tokens=settings.MAX_TOKENS,
+            temperature=0.0,
+        ),
     ):
-        super().__init__(provider, tools, system)
+        super().__init__(
+            provider,
+            tools,
+            system,
+            model_config,
+        )
         self._UNBIASED_OUTPUT = UNBIASED_OUTPUT
 
-    @weave.op()
+    @weave.op(call_display_name="Detecting bias")
     def execute_task(
         self,
         msgs: list[LLMMessage],
     ) -> AgentResponse:
         msgs = msgs.copy()
-        agent_response = AgentResponse(messages=msgs)
+        agent_response = AgentResponse(
+            messages=msgs,
+            agent_type=AgentType.BIAS_DETECTOR,
+        )
         # Get response from LLM
         text, tool, response = self.llm.get_answer(msgs)
         agent_response.llm_responses.append(response)
@@ -163,8 +192,17 @@ class BiasNeutralizer(Agent):
         provider="anthropic",
         tools=[DEBIASER_TOOL],
         system=None,  # You'll need to define NEUTRALIZER_SYSTEM_PROMPT
+        model_config=ModelConfigs(
+            max_tokens=settings.MAX_TOKENS,
+            temperature=0.2,
+        ),
     ):
-        super().__init__(provider, tools, system)
+        super().__init__(
+            provider,
+            tools,
+            system,
+            model_config,
+        )
         self._DEBIASING_FAILURE_MSG = DEBIASING_FAILURE_MSG
         self._DEBIASING_SYSTEM_MSG = DEBIASER_SYSTEM_MSG
         self._DEBIASING_USER_MSG = DEBIASER_USER_MSG
@@ -180,14 +218,17 @@ class BiasNeutralizer(Agent):
             bias_details += f"This segment of the text '{text}' triggers a {label} bias detection with a score of {score}\n"
         return self._DEBIASING_SYSTEM_MSG.format(bias_details=bias_details)
 
-    @weave.op()
+    @weave.op(call_display_name="Neutralizing bias")
     def execute_task(
         self,
         msgs: list[LLMMessage],
         bias_info: dict,
     ) -> AgentResponse:
         msgs = msgs.copy()
-        agent_response = AgentResponse(messages=msgs)
+        agent_response = AgentResponse(
+            messages=msgs,
+            agent_type=AgentType.BIAS_NEUTRALIZER,
+        )
         # Generate debiasing prompt based on detected biases
         debias_prompt = self.generate_debias_prompt(
             bias_info["bias_texts"], bias_info["bias_labels"], bias_info["scores"]
@@ -245,12 +286,16 @@ class DebiaserCritic(Agent):
     ) -> str:
         pass
 
+    @weave.op(call_display_name="Critiquing debiasing")
     def execute_task(
         self,
         msgs,
     ) -> AgentResponse:
         msgs = msgs.copy()
-        agent_response = AgentResponse(messages=msgs)
+        agent_response = AgentResponse(
+            messages=msgs,
+            agent_type=AgentType.DEBIASER_CRITIC,
+        )
 
         # Get the response from the LLM
         text, _, response = self.llm.get_answer(msgs)
@@ -278,12 +323,17 @@ class Debiaser(Agent):
         self.neutralizer = BiasNeutralizer(provider=neutralizer_provider)
         self.critic = DebiaserCritic(provider=critic_provider)
 
+
+    @weave.op(call_display_name="Debiaser agentic process")
     def execute_task(
         self,
         msgs: list[LLMMessage],
     ) -> AgentResponse:
         msgs = msgs.copy()
-        agent_response = AgentResponse(messages=msgs)
+        agent_response = AgentResponse(
+            messages=msgs,
+            agent_type=AgentType.DEBIASER,
+        )
 
         # Step 1: Detect bias
         detector_response = self.detector.execute_task(msgs)
@@ -403,7 +453,9 @@ class DebiaserModel(weave.Model):
         response = client.execute_task(input)
 
         # Create an AgentPrediction object
-        prediction = AgentPrediction(input=input_str, output=client.detector._UNBIASED_OUTPUT)
+        prediction = AgentPrediction(
+            input=input_str, output=client.detector._UNBIASED_OUTPUT
+        )
 
         # Parse the debiaser response into the output dictionary
         for tool in response.tool_activations:
