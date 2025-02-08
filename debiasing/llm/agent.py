@@ -153,7 +153,6 @@ class BiasDetector(Agent):
         self,
         msgs: list[LLMMessage],
     ) -> AgentResponse:
-
         logger.info("Starting bias detection task")
         msgs = msgs.copy()
         agent_response = AgentResponse(
@@ -217,6 +216,7 @@ class BiasNeutralizer(Agent):
             temperature=0.2,
         ),
     ):
+        logger.info(f"Initializing BiasNeutralizer with provider={provider}")
         super().__init__(
             provider,
             tools,
@@ -233,9 +233,11 @@ class BiasNeutralizer(Agent):
         bias_labels: list[str],
         scores: list[float],
     ) -> str:
+        logger.debug("Generating debiasing prompt")
         bias_details = ""
         for text, label, score in zip(bias_texts, bias_labels, scores):
             bias_details += f"This segment of the text '{text}' triggers a {label} bias detection with a score of {score}\n"
+        logger.debug(f"Generated bias details: {bias_details}")
         return self._NEUTRALIZER_SYSTEM_MSG.format(bias_details=bias_details)
 
     @weave.op(call_display_name="Neutralizing bias")
@@ -244,6 +246,9 @@ class BiasNeutralizer(Agent):
         msgs: list[LLMMessage],
         bias_info: dict,
     ) -> AgentResponse:
+        logger.info("Starting bias neutralization task")
+        logger.debug(f"Bias info received: {bias_info}")
+
         msgs = msgs.copy()
         agent_response = AgentResponse(
             messages=msgs,
@@ -265,12 +270,20 @@ class BiasNeutralizer(Agent):
             ),
         ]
         agent_response.messages.extend(msgs[-2:])
-        # Get debiased version using debiaser tool
+
+        logger.debug("Requesting debiased version using debiaser tool")
         text, tool, response = self.llm.get_answer(msgs, force_tool=True)
         agent_response.llm_responses.append(response)
+
         if tool and tool.name == DEBIASER_TOOL.name:
+            logger.info("Debiaser tool successfully activated")
             debiasing_text = tool.arguments["debiasing_text"]
             reasoning = tool.arguments["reasoning"]
+
+            logger.info("Debiasing completed successfully")
+            logger.debug(f"Debiased text: {debiasing_text}")
+            logger.debug(f"Debiasing reasoning: {reasoning}")
+
             agent_response.tool_activations.append(
                 ToolActivation(
                     tool_name=tool.name,
@@ -286,6 +299,8 @@ class BiasNeutralizer(Agent):
                 "reasoning": reasoning,
             }
             return agent_response
+
+        logger.error("Debiaser tool failed to activate")
         agent_response.response = self._NEUTRALIZER_FAILURE_MSG
         raise AgentError(agent_response.llm_responses, agent_response)
 
