@@ -312,22 +312,32 @@ class DebiaserCritic(Agent):
         tools=None,
         system=CRITIC_SYSTEM_PROMPT.format(),
     ):
-        super().__init__(provider, tools, system)
+        logger.info(f"Initializing DebiaserCritic with provider={provider}")
+        super().__init__(
+            provider,
+            tools,
+            system,
+        )
 
     @weave.op(call_display_name="Critiquing debiasing")
     def execute_task(
         self,
         msgs,
     ) -> AgentResponse:
+        logger.info("Starting critic task, aka self-reflection process")
         msgs = msgs.copy()
         agent_response = AgentResponse(
             messages=msgs,
             agent_type=AgentType.DEBIASER_CRITIC,
         )
 
-        # Get the response from the LLM
+        logger.debug("Requesting critique from LLM")
         text, _, response = self.llm.get_answer(msgs)
         agent_response.llm_responses.append(response)
+
+        critique = text.text.strip()
+        logger.info(f"Critique received: {critique}")
+
         agent_response.response = text.text.strip()  # TextPart, no tool activated
         return agent_response
 
