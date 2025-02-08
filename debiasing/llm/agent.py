@@ -139,6 +139,7 @@ class BiasDetector(Agent):
             temperature=0.0,
         ),
     ):
+        logger.info(f"Initializing BiasDetector with provider={provider}")
         super().__init__(
             provider,
             tools,
@@ -152,18 +153,28 @@ class BiasDetector(Agent):
         self,
         msgs: list[LLMMessage],
     ) -> AgentResponse:
+
+        logger.info("Starting bias detection task")
         msgs = msgs.copy()
         agent_response = AgentResponse(
             messages=msgs,
             agent_type=AgentType.BIAS_DETECTOR,
         )
-        # Get response from LLM
+
+        logger.debug(f"Input messages for bias detection: {msgs}")
         text, tool, response = self.llm.get_answer(msgs)
         agent_response.llm_responses.append(response)
+
         if tool and tool.name == GENDER_BIAS_MULTI_LABEL_CLASSIFIER_TOOL.name:
+            logger.info("Gender bias classifier tool activated")
             bias_label_detected = tool.arguments.get("bias_label", None)
             bias_text_detected = tool.arguments.get("bias_text", None)
             score_levels = tool.arguments.get("score_label", None)
+
+            logger.info(f"Detected bias labels: {bias_label_detected}")
+            logger.debug(f"Detected bias texts: {bias_text_detected}")
+            logger.debug(f"Bias detection scores: {score_levels}")
+
             agent_response.tool_activations.append(
                 ToolActivation(
                     tool_name=tool.name,
@@ -176,8 +187,11 @@ class BiasDetector(Agent):
                 )
             )
             if len(bias_label_detected) == 1 and bias_label_detected[0] == "UNBIASED":
+                logger.info("No bias detected in text")
                 agent_response.response = self._UNBIASED_OUTPUT
                 return agent_response
+
+            logger.info("Bias detected, preparing response")
             agent_response.response = {
                 "bias_detected": True,
                 "bias_labels": bias_label_detected,
@@ -185,6 +199,8 @@ class BiasDetector(Agent):
                 "scores": score_levels,
             }
             return agent_response
+
+        logger.info("No bias classifier tool activation, marking as unbiased")
         agent_response.response = self._UNBIASED_OUTPUT
         return agent_response
 
@@ -369,7 +385,7 @@ class Debiaser(Agent):
             LLMMessage(
                 role=LLMMessage.MessageRole.SYSTEM,
                 content=CRITIC_SYSTEM_MSG.format(
-                    debiased_text=debiased_text, 
+                    debiased_text=debiased_text,
                     reasoning=",".join(reasoning),
                 ),
             ),
@@ -434,12 +450,15 @@ class DebiaserModel(weave.Model):
 
     llm_provider: str
     max_reasoning_steps: int
-    detector_system_prompt: str | weave.StringPrompt = DEBIASER_SYSTEM_PROMPT
-    neutralizer_system_prompt: str | weave.StringPrompt = DEBIASER_SYSTEM_PROMPT
+    detector_system_prompt: str | weave.StringPrompt = DETECTOR_SYSTEM_PROMPT
+    neutralizer_system_prompt: str | weave.StringPrompt = NEUTRALIZER_SYSTEM_PROMPT
     critic_system_prompt: str | weave.StringPrompt = CRITIC_SYSTEM_PROMPT
 
     @weave.op()
-    def predict(self, input: str | LLMMessage | list[LLMMessage]) -> AgentPrediction:
+    def predict(
+        self,
+        input: str | LLMMessage | list[LLMMessage],
+    ) -> AgentPrediction:
         """
         Predict the output of the Debiaser Agent given an input message or a list of messages
         """
