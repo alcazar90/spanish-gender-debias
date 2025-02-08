@@ -355,12 +355,22 @@ class Debiaser(Agent):
         critic_system_prompt=CRITIC_SYSTEM_PROMPT.format(),
         max_reasoning_steps=1,
     ):
+        logger.info(
+            f"Initializing Debiaser with providers: main={provider}, "
+            f"detector={detector_provider}, neutralizer={neutralizer_provider}, "
+            f"critic={critic_provider}"
+        )
+
         # Initialize the main Debiaser agent, it doesn't matter system prompt
         # because we don't consume the Debiaser llm model directly
-        super().__init__(provider, None, system=None)
+        super().__init__(
+            provider,
+            None,
+            system=None,
+        )
         self.max_reasoning_steps = max_reasoning_steps
 
-        # Initialize sub-agents
+        logger.info("Initializing sub-agents")
         self.detector = BiasDetector(
             provider=detector_provider,
             system=detector_system_prompt,
@@ -373,12 +383,14 @@ class Debiaser(Agent):
             provider=critic_provider,
             system=critic_system_prompt,
         )
+        logger.info("All sub-agents initialized successfully")
 
     @weave.op(call_display_name="Debiaser agentic process")
     def execute_task(
         self,
         msgs: list[LLMMessage],
     ) -> AgentResponse:
+        logger.info("Starting main debiasing process")
         msgs = msgs.copy()
         agent_response = AgentResponse(
             messages=msgs,
@@ -386,16 +398,19 @@ class Debiaser(Agent):
         )
 
         # Step 1: Detect bias
+        logger.info("Step 1: Detecting bias")
         detector_response = self.detector.execute_task(msgs)
         agent_response.llm_responses.extend(detector_response.llm_responses)
         agent_response.tool_activations.extend(detector_response.tool_activations)
 
         # If no bias detected, return early
         if detector_response.response == self.detector._UNBIASED_OUTPUT:
+            logger.info("No bias detected, ending process")
             agent_response.response = self.detector._UNBIASED_OUTPUT
             return agent_response
 
         # Step 2: Neutralize bias
+        logger.info("Step 2: Neutralizing detected bias")
         neutralizer_response = self.neutralizer.execute_task(
             msgs, detector_response.response
         )
@@ -406,6 +421,7 @@ class Debiaser(Agent):
         reasoning = neutralizer_response.response["reasoning"]
 
         # Step 3: Criticism and refinement loop
+        logger.info("Step 3: Starting criticism and refinement loop")
         msgs += [
             LLMMessage(
                 role=LLMMessage.MessageRole.SYSTEM,
@@ -423,16 +439,19 @@ class Debiaser(Agent):
 
         # Iterative refinement with critic
         for i in range(self.max_reasoning_steps):
+            logger.info(f"Starting reasoning iteration {i + 1}/{self.max_reasoning_steps}")
             critic_response = self.critic.execute_task(agent_response.messages)
             agent_response.llm_responses.extend(critic_response.llm_responses)
 
-            if (
-                not critic_response.response
-                or critic_response.response == "SUCCESSFULLY_DEBIASED"
-            ):
+            if not critic_response.response:
+                logger.info("No critique provided, ending refinement loop")
+                break
+            elif critic_response.response == "SUCCESSFULLY_DEBIASED":
+                logger.info("Text successfully debiased, ending refinement loop")
                 break
 
             if i < self.max_reasoning_steps - 1:
+                logger.info("Applying critique and requesting new neutralization")
                 msgs += [
                     LLMMessage(
                         role=LLMMessage.MessageRole.SYSTEM,
@@ -455,6 +474,7 @@ class Debiaser(Agent):
 
                 debiased_text = neutralizer_response.response["debiased_text"]
 
+        logger.info("Debiasing process completed")
         agent_response.response = debiased_text
         agent_response.messages.append(
             LLMMessage(
