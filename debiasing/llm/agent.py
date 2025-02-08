@@ -9,6 +9,7 @@ from debiasing.llm.models import ModelConfigs
 from debiasing.llm.models import OpenAICompletion
 from debiasing.llm.tools import DEBIASER_TOOL
 from debiasing.llm.tools import GENDER_BIAS_MULTI_LABEL_CLASSIFIER_TOOL
+from debiasing.llm.utils import LLMToolDefinition
 from debiasing.llm.prompts import CRITIC_SYSTEM_PROMPT
 from debiasing.llm.prompts import CRITIC_SYSTEM_MSG
 from debiasing.llm.prompts import CRITIC_USER_MSG
@@ -89,9 +90,10 @@ class AgentError(Exception):
 class Agent(ABC):
     def __init__(
         self,
-        provider="anthropic",
-        tools=None,
-        system=None,
+        provider: str = "anthropic",
+        model_id: str = settings.ANTROPHIC_COMPLETION_MODEL,
+        tools: list[LLMToolDefinition] | None = None,
+        system: str | None = None,
         model_config=ModelConfigs(
             max_tokens=settings.MAX_TOKENS,
             temperature=settings.TEMPERATURE,
@@ -103,15 +105,17 @@ class Agent(ABC):
                 configs=model_config,
                 tools=tools,
                 system=system,
+                model_id=model_id,
             )
         elif provider == "openai":
             self.llm = OpenAICompletion(
                 configs=model_config,
                 tools=tools,
                 system=system,
+                model_id=model_id,
             )
         else:
-            raise ValueError("Invalid provider")
+            raise ValueError("Unsupported provider: {provider}")
 
     @abstractmethod
     def execute_task(
@@ -132,6 +136,7 @@ class BiasDetector(Agent):
     def __init__(
         self,
         provider="anthropic",
+        model_id: str = settings.ANTROPHIC_COMPLETION_MODEL,
         tools=[GENDER_BIAS_MULTI_LABEL_CLASSIFIER_TOOL],
         system=DETECTOR_SYSTEM_PROMPT.format(),  # You'll need to define DETECTOR_SYSTEM_PROMPT
         model_config=ModelConfigs(
@@ -139,7 +144,9 @@ class BiasDetector(Agent):
             temperature=0.0,
         ),
     ):
-        logger.info(f"Initializing BiasDetector with provider={provider}")
+        logger.info(
+            f"Initializing BiasDetector with provider={provider} and model_id={model_id}"
+        )
         super().__init__(
             provider,
             tools,
@@ -209,6 +216,7 @@ class BiasNeutralizer(Agent):
     def __init__(
         self,
         provider="anthropic",
+        model_id: str = settings.ANTROPHIC_COMPLETION_MODEL,
         tools=[DEBIASER_TOOL],
         system=NEUTRALIZER_SYSTEM_PROMPT.format(),  # You'll need to define NEUTRALIZER_SYSTEM_PROMPT
         model_config=ModelConfigs(
@@ -216,7 +224,9 @@ class BiasNeutralizer(Agent):
             temperature=0.2,
         ),
     ):
-        logger.info(f"Initializing BiasNeutralizer with provider={provider}")
+        logger.info(
+            f"Initializing BiasNeutralizer with provider={provider} and model_id={model_id}"
+        )
         super().__init__(
             provider,
             tools,
@@ -309,10 +319,13 @@ class DebiaserCritic(Agent):
     def __init__(
         self,
         provider="anthropic",
+        model_id: str = settings.ANTROPHIC_COMPLETION_MODEL,
         tools=None,
         system=CRITIC_SYSTEM_PROMPT.format(),
     ):
-        logger.info(f"Initializing DebiaserCritic with provider={provider}")
+        logger.info(
+            f"Initializing DebiaserCritic with provider={provider} and model_id={model_id}"
+        )
         super().__init__(
             provider,
             tools,
@@ -350,6 +363,9 @@ class Debiaser(Agent):
         detector_provider="anthropic",  # Allow different provider for detector
         neutralizer_provider="anthropic",
         critic_provider="anthropic",
+        detector_model_id=settings.ANTROPHIC_COMPLETION_MODEL,
+        neutralizer_model_id=settings.ANTROPHIC_COMPLETION_MODEL,
+        critic_model_id=settings.ANTROPHIC_COMPLETION_MODEL,
         detector_system_prompt=DETECTOR_SYSTEM_PROMPT.format(),
         neutralizer_system_prompt=NEUTRALIZER_SYSTEM_PROMPT.format(),
         critic_system_prompt=CRITIC_SYSTEM_PROMPT.format(),
@@ -357,8 +373,8 @@ class Debiaser(Agent):
     ):
         logger.info(
             f"Initializing Debiaser with providers: main={provider}, "
-            f"detector={detector_provider}, neutralizer={neutralizer_provider}, "
-            f"critic={critic_provider}"
+            f"detector={detector_model_id}, neutralizer={neutralizer_model_id}, "
+            f"critic={critic_model_id}"
         )
 
         # Initialize the main Debiaser agent, it doesn't matter system prompt
@@ -374,14 +390,17 @@ class Debiaser(Agent):
         self.detector = BiasDetector(
             provider=detector_provider,
             system=detector_system_prompt,
+            model_id=detector_model_id,
         )
         self.neutralizer = BiasNeutralizer(
             provider=neutralizer_provider,
             system=neutralizer_system_prompt,
+            model_id=neutralizer_model_id,
         )
         self.critic = DebiaserCritic(
             provider=critic_provider,
             system=critic_system_prompt,
+            model_id=critic_model_id,
         )
         logger.info("All sub-agents initialized successfully")
 
@@ -439,7 +458,9 @@ class Debiaser(Agent):
 
         # Iterative refinement with critic
         for i in range(self.max_reasoning_steps):
-            logger.info(f"Starting reasoning iteration {i + 1}/{self.max_reasoning_steps}")
+            logger.info(
+                f"Starting reasoning iteration {i + 1}/{self.max_reasoning_steps}"
+            )
             critic_response = self.critic.execute_task(agent_response.messages)
             agent_response.llm_responses.extend(critic_response.llm_responses)
 
