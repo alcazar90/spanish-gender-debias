@@ -2,9 +2,9 @@
 Below are examples of gender-biased and unbiased phrases used in university communications, as well as description of the changes made:
 
 Example 1:
-Biased: Invitamos a la Comunidad Universitaria los días 22 y 23 de mayo a participar de la Campaña de Donación a cargo del Centro Metropolitano de Sangre.
+Biased: Invitamos a las y los estudiantes universitarios los días 22 y 23 de mayo a participar de la Campaña de Donación a cargo del Centro Metropolitano de Sangre.
 Unbiased: Invitamos a la Comunidad Universitaria los días 22 y 23 de mayo a participar de la Campaña de Donación a cargo del Centro Metropolitano de Sangre.
-Changes: Se reemplazó "todos" por "la Comunidad Universitaria" para incluir a todas las personas sin especificar género.
+Changes: Se reemplazó las y los esutdiantes universitarios por "Comunidad Universitaria", a pesar de tener 'las y los estudiantes' en el texto original, existe una palabra para referirse al estudiantado sin implicar genero como lo es comunidad universitaria.
 
 Example 2:
 Biased: Los estudiantes que deseen postergar el semestre Primavera 2018, deben solicitar dicha postergación vía Workflow/solicitudes al CAD.

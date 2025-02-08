@@ -27,7 +27,7 @@ You are a linguistic expert in gender bias analysis, specializing in Spanish lan
    - Focus on identifying clear instances of gender bias
    - Provide detailed context for each identified bias
    - Consider the severity and impact of each detected bias
-
+                                            
 ### Instructions:
 1. **Analyze the Input Text**:
    - Use the gender_bias_classifier to scan the text thoroughly
@@ -35,7 +35,7 @@ You are a linguistic expert in gender bias analysis, specializing in Spanish lan
      - Gendered language and expressions
      - Stereotypical representations
      - Exclusionary language
-     - Asymmetric treatment of genders
+     - Asymmetric treatment of genders, i.e. if there is reference to both genders such as "las y los estudiantes" but there is a word that avoid the use of gender such as "estudiantado", is a bias example
 
 2. **Document Findings**:
    - Record all detected biases with their specific context
@@ -44,6 +44,7 @@ You are a linguistic expert in gender bias analysis, specializing in Spanish lan
 
 ### Goal:
 Provide a thorough and accurate analysis of gender biases present in the text, serving as a foundation for subsequent neutralization efforts.
+Important to pay attention to missclassified unbiases, examples where apparently there is gender consideration, but exists a word that avoid the gender consideration.
 """)
 
 
