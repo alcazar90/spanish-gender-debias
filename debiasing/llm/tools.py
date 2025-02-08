@@ -214,7 +214,6 @@ class DebiasingText(
 
     debiasing_text: str = Field(
         description="The neutralized version of the original text, with all identified gender biases removed. This version maintains the original semantic meaning, communication intent, and context, but uses gender-inclusive language. It represents the final, bias-free text output.",
-        # description="The neutralized version of the text with gender biases removed while maintaining original context and meaning.",
         title="Debiased Text",
         example="A programmer must carry their laptop to work.",
     )
@@ -237,10 +236,6 @@ class DebiasingText(
         }
     }
 
-
-# DEBIASING_TEXT_DESCRIPTION = weave.StringPrompt("""
-# A sophisticatrd text analysis and modification tool designed to detect and neutralize gender biases in text. The tool performs a precise linguistic intervention, identifying specific gender bias types and transforming the text to use inclusive language while meticulously preserving the original semantic meaning and communicative intent.
-# """)
 
 DEBIASING_TEXT_DESCRIPTION = weave.StringPrompt("""
 A sophisticated text analysis and modification tool designed to detect and neutralize gender biases in text. 
