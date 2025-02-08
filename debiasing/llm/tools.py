@@ -191,7 +191,7 @@ class MultiLabelGenderBiasClassifier(
 
 
 # Now we will define Multi-label gender bias classifier tool using LLMToolDefinition
-GENDER_BIAS_MULTI_LABEL_CLASSIFIER = LLMToolDefinition(
+GENDER_BIAS_MULTI_LABEL_CLASSIFIER_TOOL = LLMToolDefinition(
     name="gender_bias_classifier",
     description=GENDER_BIAS_CLASSIFIER_DESCRIPTION.format(),
     inputSchema=MultiLabelGenderBiasClassifier.model_json_schema(),
@@ -256,7 +256,7 @@ weave.publish(DEBIASING_TEXT_DESCRIPTION, name="DEBIASING_TEXT_DESCRIPTION")
 
 # A text analysis and modification tool desgiend for debiasing a text that contain grnder biases. The fragment of the text will be given with the specific gender bias detected, your work is neutralize the biases applying minimal modifications and present a debiased text version while preserving the original meaning and context.
 
-DEBIASER = LLMToolDefinition(
+DEBIASER_TOOL = LLMToolDefinition(
     name="debiaser",
     description=DEBIASING_TEXT_DESCRIPTION.format(),
     inputSchema=DebiasingText.model_json_schema(),
