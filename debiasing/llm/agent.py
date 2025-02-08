@@ -523,11 +523,20 @@ class DebiaserModel(weave.Model):
     plus the prompts and the reasoning steps during the debiasing process.
     """
 
-    llm_provider: str
     max_reasoning_steps: int
+
+    detector_provider: str
+    detector_model_id: str
     detector_system_prompt: str | weave.StringPrompt = DETECTOR_SYSTEM_PROMPT
+
+    neutralizer_provider: str
+    neutralizer_model_id: str
     neutralizer_system_prompt: str | weave.StringPrompt = NEUTRALIZER_SYSTEM_PROMPT
+
+    critic_provider: str
+    critic_model_id: str
     critic_system_prompt: str | weave.StringPrompt = CRITIC_SYSTEM_PROMPT
+
 
     @weave.op()
     def predict(
@@ -554,10 +563,20 @@ class DebiaserModel(weave.Model):
         # Initialize the Debiaser Agent, providing the necessary configuration
         # to each of the sub-agents, i.e. detector, neutralizer, critic
         client = Debiaser(
-            provider=self.llm_provider,
             max_reasoning_steps=self.max_reasoning_steps,
+            # detector subagent
+            detector_provider=self.detector_provider,
+            detector_model_id=self.detector_model_id,
             detector_system_prompt=self.detector_system_prompt.format(),
+
+            # neutralizer subagent
+            neutralizer_provider=self.neutralizer_provider,
+            neutralizer_model_id=self.neutralizer_model_id,
             neutralizer_system_prompt=self.neutralizer_system_prompt.format(),
+
+            # critic subagent
+            critic_provider=self.critic_provider,
+            critic_model_id=self.critic_model_id,
             critic_system_prompt=self.critic_system_prompt.format(),
         )
 
