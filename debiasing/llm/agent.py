@@ -10,9 +10,13 @@ from debiasing.llm.models import OpenAICompletion
 from debiasing.llm.tools import DEBIASER_TOOL
 from debiasing.llm.tools import GENDER_BIAS_MULTI_LABEL_CLASSIFIER_TOOL
 from debiasing.llm.prompts import CRITIC_SYSTEM_PROMPT
-from debiasing.llm.prompts import DEBIASER_SYSTEM_PROMPT
-from debiasing.llm.prompts import DEBIASER_SYSTEM_MSG
-from debiasing.llm.prompts import DEBIASER_USER_MSG
+from debiasing.llm.prompts import CRITIC_SYSTEM_MSG
+from debiasing.llm.prompts import CRITIC_USER_MSG
+from debiasing.llm.prompts import CRITIC_USER_MSG_ITERATION
+from debiasing.llm.prompts import DETECTOR_SYSTEM_PROMPT
+from debiasing.llm.prompts import NEUTRALIZER_SYSTEM_PROMPT
+from debiasing.llm.prompts import NEUTRALIZER_SYSTEM_MSG
+from debiasing.llm.prompts import NEUTRALIZER_USER_MSG
 from debiasing.llm.utils import LLMMessage
 from enum import StrEnum
 from typing import Any
@@ -20,11 +24,11 @@ from pydantic import BaseModel
 from pydantic import Field
 
 
-# Constants for the debiasing process
-
-# Output message when the text is considered unbiased and the debiasing process fails
+# Constants for the debiasing process, such as the output message when the text
+#  is considered unbiased and the debiasing process fails
 UNBIASED_OUTPUT = "UNBIASED"
-DEBIASING_FAILURE_MSG = "Debiasing tool not activated"
+NEUTRALIZER_FAILURE_MSG = "Debiasing tool not activated"
+DEBIASER_OUTPUT = "The debiasing process has been completed. The final debiased text is: '{debiased_text}'"
 
 
 class AgentType(StrEnum):
@@ -129,7 +133,7 @@ class BiasDetector(Agent):
         self,
         provider="anthropic",
         tools=[GENDER_BIAS_MULTI_LABEL_CLASSIFIER_TOOL],
-        system=None,  # You'll need to define DETECTOR_SYSTEM_PROMPT
+        system=DETECTOR_SYSTEM_PROMPT.format(),  # You'll need to define DETECTOR_SYSTEM_PROMPT
         model_config=ModelConfigs(
             max_tokens=settings.MAX_TOKENS,
             temperature=0.0,
@@ -191,7 +195,7 @@ class BiasNeutralizer(Agent):
         self,
         provider="anthropic",
         tools=[DEBIASER_TOOL],
-        system=None,  # You'll need to define NEUTRALIZER_SYSTEM_PROMPT
+        system=NEUTRALIZER_SYSTEM_PROMPT.format(),  # You'll need to define NEUTRALIZER_SYSTEM_PROMPT
         model_config=ModelConfigs(
             max_tokens=settings.MAX_TOKENS,
             temperature=0.2,
@@ -203,9 +207,9 @@ class BiasNeutralizer(Agent):
             system,
             model_config,
         )
-        self._DEBIASING_FAILURE_MSG = DEBIASING_FAILURE_MSG
-        self._DEBIASING_SYSTEM_MSG = DEBIASER_SYSTEM_MSG
-        self._DEBIASING_USER_MSG = DEBIASER_USER_MSG
+        self._NEUTRALIZER_FAILURE_MSG = NEUTRALIZER_FAILURE_MSG
+        self._NEUTRALIZER_SYSTEM_MSG = NEUTRALIZER_SYSTEM_MSG
+        self._NEUTRALIZER_USER_MSG = NEUTRALIZER_USER_MSG
 
     def generate_debias_prompt(
         self,
@@ -216,7 +220,7 @@ class BiasNeutralizer(Agent):
         bias_details = ""
         for text, label, score in zip(bias_texts, bias_labels, scores):
             bias_details += f"This segment of the text '{text}' triggers a {label} bias detection with a score of {score}\n"
-        return self._DEBIASING_SYSTEM_MSG.format(bias_details=bias_details)
+        return self._NEUTRALIZER_SYSTEM_MSG.format(bias_details=bias_details)
 
     @weave.op(call_display_name="Neutralizing bias")
     def execute_task(
@@ -241,7 +245,7 @@ class BiasNeutralizer(Agent):
             ),
             LLMMessage(
                 role=LLMMessage.MessageRole.USER,
-                content=self._DEBIASING_USER_MSG.format(),
+                content=self._NEUTRALIZER_USER_MSG.format(),
             ),
         ]
         agent_response.messages.extend(msgs[-2:])
@@ -266,7 +270,7 @@ class BiasNeutralizer(Agent):
                 "reasoning": reasoning,
             }
             return agent_response
-        agent_response.response = self._DEBIASING_FAILURE_MSG
+        agent_response.response = self._NEUTRALIZER_FAILURE_MSG
         raise AgentError(agent_response.llm_responses, agent_response)
 
 
@@ -278,13 +282,6 @@ class DebiaserCritic(Agent):
         system=CRITIC_SYSTEM_PROMPT.format(),
     ):
         super().__init__(provider, tools, system)
-
-    def generate_critic_prompt(
-        self,
-        debiasing_text: str,
-        reasoning: list[str],
-    ) -> str:
-        pass
 
     @weave.op(call_display_name="Critiquing debiasing")
     def execute_task(
@@ -312,17 +309,29 @@ class Debiaser(Agent):
         detector_provider="anthropic",  # Allow different provider for detector
         neutralizer_provider="anthropic",
         critic_provider="anthropic",
-        system=DEBIASER_SYSTEM_PROMPT.format(),
+        detector_system_prompt=DETECTOR_SYSTEM_PROMPT.format(),
+        neutralizer_system_prompt=NEUTRALIZER_SYSTEM_PROMPT.format(),
+        critic_system_prompt=CRITIC_SYSTEM_PROMPT.format(),
         max_reasoning_steps=1,
     ):
-        super().__init__(provider, None, system)
+        # Initialize the main Debiaser agent, it doesn't matter system prompt
+        # because we don't consume the Debiaser llm model directly
+        super().__init__(provider, None, system=None)
         self.max_reasoning_steps = max_reasoning_steps
 
         # Initialize sub-agents
-        self.detector = BiasDetector(provider=detector_provider)
-        self.neutralizer = BiasNeutralizer(provider=neutralizer_provider)
-        self.critic = DebiaserCritic(provider=critic_provider)
-
+        self.detector = BiasDetector(
+            provider=detector_provider,
+            system=detector_system_prompt,
+        )
+        self.neutralizer = BiasNeutralizer(
+            provider=neutralizer_provider,
+            system=neutralizer_system_prompt,
+        )
+        self.critic = DebiaserCritic(
+            provider=critic_provider,
+            system=critic_system_prompt,
+        )
 
     @weave.op(call_display_name="Debiaser agentic process")
     def execute_task(
@@ -359,11 +368,14 @@ class Debiaser(Agent):
         msgs += [
             LLMMessage(
                 role=LLMMessage.MessageRole.SYSTEM,
-                content=f"Here is the debiased version: '{debiased_text}' and the reasoning behind the debiasing: '{','.join(reasoning)}'",
+                content=CRITIC_SYSTEM_MSG.format(
+                    debiased_text=debiased_text, 
+                    reasoning=",".join(reasoning),
+                ),
             ),
             LLMMessage(
                 role=LLMMessage.MessageRole.USER,
-                content="Do you have any feedback on the debiasing process?",
+                content=CRITIC_USER_MSG.format(),
             ),
         ]
         agent_response.messages.extend(msgs[-2:])
@@ -387,7 +399,7 @@ class Debiaser(Agent):
                     ),
                     LLMMessage(
                         role=LLMMessage.MessageRole.USER,
-                        content="Use the debiaser tool and the feedback provided to refine the debiasing process and propose a new debiased text",
+                        content=CRITIC_USER_MSG_ITERATION.format(),
                     ),
                 ]
                 agent_response.messages.extend(msgs[-2:])
@@ -406,7 +418,7 @@ class Debiaser(Agent):
         agent_response.messages.append(
             LLMMessage(
                 role=LLMMessage.MessageRole.SYSTEM,
-                content=f"The debiasing process has been completed. The final debiased text is: '{debiased_text}'",
+                content=DEBIASER_OUTPUT.format(debiased_text=debiased_text),
             )
         )
         return agent_response
@@ -422,7 +434,9 @@ class DebiaserModel(weave.Model):
 
     llm_provider: str
     max_reasoning_steps: int
-    system_prompt: str | weave.StringPrompt = DEBIASER_SYSTEM_PROMPT
+    detector_system_prompt: str | weave.StringPrompt = DEBIASER_SYSTEM_PROMPT
+    neutralizer_system_prompt: str | weave.StringPrompt = DEBIASER_SYSTEM_PROMPT
+    critic_system_prompt: str | weave.StringPrompt = CRITIC_SYSTEM_PROMPT
 
     @weave.op()
     def predict(self, input: str | LLMMessage | list[LLMMessage]) -> AgentPrediction:
@@ -443,11 +457,14 @@ class DebiaserModel(weave.Model):
         else:
             raise ValueError("Invalid input type")
 
-        # Initialize the Debiaser Agent
+        # Initialize the Debiaser Agent, providing the necessary configuration
+        # to each of the sub-agents, i.e. detector, neutralizer, critic
         client = Debiaser(
             provider=self.llm_provider,
             max_reasoning_steps=self.max_reasoning_steps,
-            system=self.system_prompt.format(),
+            detector_system_prompt=self.detector_system_prompt.format(),
+            neutralizer_system_prompt=self.neutralizer_system_prompt.format(),
+            critic_system_prompt=self.critic_system_prompt.format(),
         )
 
         response = client.execute_task(input)
