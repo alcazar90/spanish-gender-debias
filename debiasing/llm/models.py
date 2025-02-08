@@ -20,10 +20,12 @@ class LLMModel(ABC):
         configs: ModelConfigs | None = None,
         system: str | None = None,
         tools: list[LLMToolDefinition] | None = None,
+        model_id: str | None = None,
     ):
         self.configs = configs if configs is not None else ModelConfigs()
         self.system = system
         self.tools = tools or []
+        self.model_id = model_id
 
     @abstractmethod
     def get_answer(
@@ -50,6 +52,7 @@ class AntrophicCompletion(LLMModel):
             configs=configs,
             system=system,
             tools=tools,
+            model_id=model_id,
         )
         self.model_id = model_id
 
@@ -143,6 +146,7 @@ class OpenAICompletion(LLMModel):
             configs=configs,
             system=system,
             tools=tools,
+            model_id=model_id,
         )
         self.model_id = model_id
 

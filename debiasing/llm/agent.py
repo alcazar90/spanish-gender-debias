@@ -149,6 +149,7 @@ class BiasDetector(Agent):
         )
         super().__init__(
             provider,
+            model_id,
             tools,
             system,
             model_config,
@@ -229,6 +230,7 @@ class BiasNeutralizer(Agent):
         )
         super().__init__(
             provider,
+            model_id,
             tools,
             system,
             model_config,
@@ -322,14 +324,20 @@ class DebiaserCritic(Agent):
         model_id: str = settings.ANTROPHIC_COMPLETION_MODEL,
         tools=None,
         system=CRITIC_SYSTEM_PROMPT.format(),
+        model_config=ModelConfigs(
+            max_tokens=settings.MAX_TOKENS,
+            temperature=0.3,
+        ),
     ):
         logger.info(
             f"Initializing DebiaserCritic with provider={provider} and model_id={model_id}"
         )
         super().__init__(
             provider,
+            model_id,
             tools,
             system,
+            model_config,
         )
 
     @weave.op(call_display_name="Critiquing debiasing")
@@ -380,8 +388,9 @@ class Debiaser(Agent):
         # Initialize the main Debiaser agent, it doesn't matter system prompt
         # because we don't consume the Debiaser llm model directly
         super().__init__(
-            provider,
-            None,
+            provider=provider,
+            model_id=None,
+            tools=None,
             system=None,
         )
         self.max_reasoning_steps = max_reasoning_steps
