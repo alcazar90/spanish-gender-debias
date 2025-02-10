@@ -1,0 +1,25 @@
+
+Below are examples of gender-biased phrases used in university communications along with suggested unbiased versions:
+
+Example 1:
+Biased: Invitamos a la Comunidad Universitaria los días 22 y 23 de mayo a participar de la Campaña de Donación a cargo del Centro Metropolitano de Sangre.
+Debiased Version: Invitamos a la Comunidad Universitaria los días 22 y 23 de mayo a participar de la Campaña de Donación a cargo del Centro Metropolitano de Sangre.
+
+Example 2:
+Biased: Los estudiantes que deseen postergar el semestre Primavera 2018, deben solicitar dicha postergación vía Workflow/solicitudes al CAD.
+Debiased Version: L@s estudiantes que deseen postergar el semestre Primavera 2018, deben solicitar dicha postergación vía Workflow/solicitudes al CAD.
+
+Example 3:
+Biased: No se contabilizará las inasistencias de los estudiantes mechones a cursos que requieran un porcentaje mínimo de asistencia para la aprobación, pero se mantiene la obligación de asistir a actividades que por su naturaleza no se puedan reprogramar (por ejemplo, laboratorios, salidas a terreno, etc.).
+Debiased Version: No se contabilizará las inasistencias de las/os estudiantes mechonas/es a cursos que requieran un porcentaje mínimo de asistencia para la aprobación, pero se mantiene la obligación de asistir a actividades que por su naturaleza no se puedan reprogramar (por ejemplo, laboratorios, salidas a terreno, etc.).
+
+Example 4:
+Biased: En este contexto, desde hoy miércoles y hasta el lunes 5 de diciembre, el patio central de Beauchef 850 estará intervenido por los preparativos e instalaciones necesarias para llevar a cabo estas significativas ceremonias para nuestros/as graduados/as y sus seres queridos.
+Debiased Version: En este contexto, desde hoy miércoles y hasta el lunes 5 de diciembre, el patio central de Beauchef 850 estará intervenido por los preparativos e instalaciones necesarias para llevar a cabo estas significativas ceremonias para nuestras/os graduadas/os y sus seres queridos.
+
+Example 5:
+Biased: D.- Se recuerda a los alumnos que los cheques deben ser cobrados antes de 60 días contados, desde su fecha de emisión, ya que en caso contrario al caducar el documento este NO será revalidado por Bienestar Estudiantil Central.
+Debiased Version: D.- Se recuerda a las y los estudiantes que los cheques deben ser cobrados antes de 60 días contados, desde su fecha de emisión, ya que en caso contrario al caducar el documento este NO será revalidado por Bienestar Estudiantil Central.
+
+
+Use these examples as a guide on how biased phrases are identified and what the unbiased versions should look like.

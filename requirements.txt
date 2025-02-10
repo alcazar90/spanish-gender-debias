@@ -2,3 +2,6 @@ ruff
 pydantic==2.6.1
 pydantic-settings==2.1.0
 requests
+pandas
+openpyxl
+weave
