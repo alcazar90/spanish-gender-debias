@@ -34,7 +34,7 @@ Justificación:::
 Ejemplo 1:
 input_text: "Invitamos a nuestros estudiantes de postgrado al "Workshop: Writing Effective Emails" Sólo debes inscribirte en:  Inscripción Los esperamos!"
 system_output: "Les invitamos al "Workshop: Writing Effective Emails" Sólo debes inscribirte en:  Inscripción Les esperamos!"
-
+bias
 Debería retornar:
 "
 ---
@@ -50,7 +50,7 @@ system_output: "Se informa al estudiantado que quienes ingresaron a primer año 
 Debería retornar:
 "
 ---
-Resultado de sesgo: (X) Cambio negativo
+Resultado: (X) Cambio negativo
 Justificación::: Se cambió "los alumnos/as" por "estudiantado", lo cual no modifica el mensaje semántico ni tampoco agrega sesgo de género. Sin embargo, más tarde en el texto se usa el adjetivo plural rezagados (en vez de rezagadas/os), lo cual implica específicamente el género masculino.
 ---
 "
@@ -62,7 +62,7 @@ system_output: "Estimad@s Estudiantes: Se recomienda para agilizar el proceso de
 Debería retornar:
 "
 ---
-Resultado de sesgo: (Y) Sin cambios negativos
+Resultado: (Y) Sin cambios negativos
 Justificación::: el output cambia "Alumnos (as)" por "estudiantes" lo cual mantiene el significado semántico. Además, corrije el sesgo de género en "Estimados" al utilizar "Estimad@s".
 ---
 "
@@ -74,7 +74,7 @@ system_output: "El taller es con inscripción previa, con el objetivo de resguar
 Debería retornar:
 "
 ---
-Resultado de sesgo: (X) Cambio negativo
+Resultado: (X) Cambio negativo
 Justificación::: Se omitió el artículo "la" en "la privacidad", lo cual no disminuye sesgo de género pues privacidad no hace referencia a humanos/as. Además, el texto hace referencia a "les alumnes", lo cual si bien no tiene sesgo de género, no era necesario dado el texto original.
 ---
 "
