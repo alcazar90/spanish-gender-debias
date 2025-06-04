@@ -1,4 +1,8 @@
-# spanish-gender-debias
+<h1 align="center">
+  &nbsp; Mitigating gender bias in STEM education<br>using an LLM-based corrector for student communication<br>
+  👧⚖️👦<br>
+</h1>
+
 
 # Install packages
 
@@ -6,7 +10,11 @@
 python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
+pip install -e .
 ```
+
+Ensure you have set your API keys correctly in your `.env` file, you can find an exmaple env file in the repo: `.example-env`.
+
 
 # Web
 

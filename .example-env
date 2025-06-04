@@ -1,0 +1,5 @@
+OPENAI_EMB_ENDPOINT=https://api.openai.com/v1/embeddings
+OPENAI_CHAT_ENDPOINT=https://api.openai.com/v1/chat/completions
+OPENAI_API_KEY=<YOUR-API-KEY>
+ANTROPHIC_CHAT_ENDPOINT=https://api.anthropic.com/v1/messages
+ANTROPHIC_API_KEY=<YOUR-API-KEY>
