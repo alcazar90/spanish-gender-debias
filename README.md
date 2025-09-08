@@ -1,5 +1,5 @@
 <h1 align="center">
-  &nbsp; Mitigating gender bias in STEM education<br>using an LLM-based corrector for student communication<br>
+&nbsp; Using language models <br>to detect and reduce gender bias in university forum messages<br>
   👧⚖️👦<br>
 </h1>
 
