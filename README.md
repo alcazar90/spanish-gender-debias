@@ -3,6 +3,9 @@
   👧⚖️👦<br>
 </h1>
 
+<a href="https://github.com/GianniCatBug/spanish-gender-debias/blob/f9cd550f4b7850f8beb1f4ab3f3ecb0210b3e44b/paper-using-language-models-to-detect-and-reduce-gender-bias-in-university-forum-messages.pdf" target="_blank">[Paper]</a>
+<a href="https://github.com/GianniCatBug/spanish-gender-debias/blob/f9cd550f4b7850f8beb1f4ab3f3ecb0210b3e44b/annotators-manual.pdf" target="_blank">[Annotators Manual]</a>
+<a href="https://github.com/GianniCatBug/spanish-gender-debias" target="_blank">[Publication]</a>
 
 # Install packages
 
