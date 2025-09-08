@@ -33,12 +33,15 @@ uvicorn api:app --reload
 4. Open `index.html` in browser
 
 
+## Citing
 
 ```
-@misc{SpanishGenderDebiasFCFM,
-  authors = {Salomo-López, Gianina}, {Alcázar, Cristóbal}, {Barceló, Roberto}, {Carvajal Reyes, Camilo}, {Radovic, Darinka}, {Tobar, Felipe}
+@article{salomo_SPM2025,
+  author = {Salomo-López, Gianina and Alcázar, Cristóbal and Barceló, Roberto and Carvajal Reyes, Camilo and Radovic, Darinka and Tobar, Felipe},
   title = {Using language models to detect and reduce gender bias in university forum messages},
-  year = {2025},
+  journal = {IEEE Signal Processing Magazine},
+  note = {In press},
+  year = {2025}
 }
 ```
 
